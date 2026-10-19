@@ -648,6 +648,10 @@ func (h *Handler) AttachLabelToSkill(w http.ResponseWriter, r *http.Request) {
 	if !ok || !h.canManageSkill(w, r, skill) {
 		return
 	}
+	if !skill.WorkspaceID.Valid {
+		writeError(w, http.StatusBadRequest, "global skills do not support workspace labels")
+		return
+	}
 	var req AttachLabelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LabelID == "" {
 		writeError(w, http.StatusBadRequest, "label_id is required")
@@ -675,6 +679,10 @@ func (h *Handler) AttachLabelToSkill(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DetachLabelFromSkill(w http.ResponseWriter, r *http.Request) {
 	skill, ok := h.loadSkillForUser(w, r, chi.URLParam(r, "id"))
 	if !ok || !h.canManageSkill(w, r, skill) {
+		return
+	}
+	if !skill.WorkspaceID.Valid {
+		writeError(w, http.StatusBadRequest, "global skills do not support workspace labels")
 		return
 	}
 	labelID, ok := parseUUIDOrBadRequest(w, chi.URLParam(r, "labelId"), "label id")

@@ -67,6 +67,15 @@ func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill
 	return i, err
 }
 
+const deleteGlobalSkill = `-- name: DeleteGlobalSkill :exec
+DELETE FROM skill WHERE id = $1 AND workspace_id IS NULL
+`
+
+func (q *Queries) DeleteGlobalSkill(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteGlobalSkill, id)
+	return err
+}
+
 const deleteSkill = `-- name: DeleteSkill :exec
 DELETE FROM skill WHERE id = $1 AND workspace_id = $2
 `
@@ -172,18 +181,20 @@ func (q *Queries) GetSkillFile(ctx context.Context, id pgtype.UUID) (SkillFile, 
 	return i, err
 }
 
-const getSkillInWorkspace = `-- name: GetSkillInWorkspace :one
+const getSkillVisibleInWorkspace = `-- name: GetSkillVisibleInWorkspace :one
 SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id FROM skill
-WHERE id = $1 AND workspace_id = $2
+WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)
 `
 
-type GetSkillInWorkspaceParams struct {
+type GetSkillVisibleInWorkspaceParams struct {
 	ID          pgtype.UUID `json:"id"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
-func (q *Queries) GetSkillInWorkspace(ctx context.Context, arg GetSkillInWorkspaceParams) (Skill, error) {
-	row := q.db.QueryRow(ctx, getSkillInWorkspace, arg.ID, arg.WorkspaceID)
+// A skill is visible from a workspace when it belongs to that workspace or is
+// global (workspace_id IS NULL).
+func (q *Queries) GetSkillVisibleInWorkspace(ctx context.Context, arg GetSkillVisibleInWorkspaceParams) (Skill, error) {
+	row := q.db.QueryRow(ctx, getSkillVisibleInWorkspace, arg.ID, arg.WorkspaceID)
 	var i Skill
 	err := row.Scan(
 		&i.ID,
@@ -378,21 +389,24 @@ func (q *Queries) ListAgentSkillsByIDs(ctx context.Context, arg ListAgentSkillsB
 }
 
 const listAgentSkillsByWorkspace = `-- name: ListAgentSkillsByWorkspace :many
-SELECT ask.agent_id, s.id, s.name, s.description, ask.enabled
+SELECT ask.agent_id, s.id, s.workspace_id, s.name, s.description, ask.enabled
 FROM agent_skill ask
 JOIN skill s ON s.id = ask.skill_id
-WHERE s.workspace_id = $1
+WHERE s.workspace_id = $1 OR s.workspace_id IS NULL
 ORDER BY s.name ASC
 `
 
 type ListAgentSkillsByWorkspaceRow struct {
 	AgentID     pgtype.UUID `json:"agent_id"`
 	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	Enabled     bool        `json:"enabled"`
 }
 
+// Global skills are bindable from any workspace, so the batch agent-list read
+// includes them alongside workspace-owned skills.
 func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentSkillsByWorkspaceRow, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillsByWorkspace, workspaceID)
 	if err != nil {
@@ -405,6 +419,7 @@ func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pg
 		if err := rows.Scan(
 			&i.AgentID,
 			&i.ID,
+			&i.WorkspaceID,
 			&i.Name,
 			&i.Description,
 			&i.Enabled,
@@ -557,7 +572,7 @@ func (q *Queries) ListSkillFilesBySkillIDs(ctx context.Context, skillIds []pgtyp
 const listSkillSummariesByWorkspace = `-- name: ListSkillSummariesByWorkspace :many
 SELECT id, workspace_id, name, description, config, created_by, created_at, updated_at
 FROM skill
-WHERE workspace_id = $1
+WHERE workspace_id = $1 OR workspace_id IS NULL
 ORDER BY name ASC
 `
 
@@ -608,11 +623,12 @@ func (q *Queries) ListSkillSummariesByWorkspace(ctx context.Context, workspaceID
 const listSkillsByWorkspace = `-- name: ListSkillsByWorkspace :many
 
 SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id FROM skill
-WHERE workspace_id = $1
+WHERE workspace_id = $1 OR workspace_id IS NULL
 ORDER BY name ASC
 `
 
 // Skill CRUD
+// Global skills (workspace_id IS NULL) are visible from every workspace.
 func (q *Queries) ListSkillsByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Skill, error) {
 	rows, err := q.db.Query(ctx, listSkillsByWorkspace, workspaceID)
 	if err != nil {
@@ -642,6 +658,72 @@ func (q *Queries) ListSkillsByWorkspace(ctx context.Context, workspaceID pgtype.
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveSkillToWorkspace = `-- name: MoveSkillToWorkspace :one
+UPDATE skill SET
+    workspace_id = $2,
+    updated_at = now()
+WHERE id = $1 AND workspace_id IS NULL
+RETURNING id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id
+`
+
+type MoveSkillToWorkspaceParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Demotion targets one workspace at a time; the caller chooses the current
+// workspace. The NULL predicate prevents moving a workspace-owned skill.
+func (q *Queries) MoveSkillToWorkspace(ctx context.Context, arg MoveSkillToWorkspaceParams) (Skill, error) {
+	row := q.db.QueryRow(ctx, moveSkillToWorkspace, arg.ID, arg.WorkspaceID)
+	var i Skill
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Description,
+		&i.Content,
+		&i.Config,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PluginInstallationID,
+	)
+	return i, err
+}
+
+const promoteSkillToGlobal = `-- name: PromoteSkillToGlobal :one
+UPDATE skill SET
+    workspace_id = NULL,
+    updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id
+`
+
+type PromoteSkillToGlobalParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// The explicit workspace predicate makes promotion a no-op for a row that is
+// already global or moved between workspaces.
+func (q *Queries) PromoteSkillToGlobal(ctx context.Context, arg PromoteSkillToGlobalParams) (Skill, error) {
+	row := q.db.QueryRow(ctx, promoteSkillToGlobal, arg.ID, arg.WorkspaceID)
+	var i Skill
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Description,
+		&i.Content,
+		&i.Config,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PluginInstallationID,
+	)
+	return i, err
 }
 
 const removeAgentSkill = `-- name: RemoveAgentSkill :exec

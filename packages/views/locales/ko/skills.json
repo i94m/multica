@@ -47,6 +47,7 @@
     "supporting_data_warning": "일부 워크스페이스 데이터를 불러오지 못했습니다. 생성자 표시, 런타임 이름, 수정 권한이 불완전하게 보일 수 있습니다."
   },
   "table": {
+    "global": "전역",
     "name": "이름",
     "created_by": "추가한 사람",
     "used_by": "사용 중",
@@ -67,6 +68,19 @@
   "actions": {
     "row_menu": "작업",
     "add_to_agent": "에이전트에 추가",
+    "set_global": "전역 스킬로 설정",
+    "move_to_workspace": "현재 워크스페이스로 이동",
+    "global_dialog_title": "이 스킬을 전역으로 설정할까요?",
+    "global_dialog_description": "\"{{name}}\" 스킬은 모든 워크스페이스에서 사용할 수 있게 됩니다. 모든 멤버가 에이전트에 추가할 수 있지만, 워크스페이스 소유자와 관리자만 수정할 수 있습니다.",
+    "global_dialog_warning": "모든 워크스페이스에 영향을 줍니다. 나중에 워크스페이스로 다시 이동할 수 있습니다.",
+    "global_dialog_confirm": "전역으로 설정",
+    "move_dialog_title": "이 스킬을 현재 워크스페이스로 이동할까요?",
+    "move_dialog_description": "\"{{name}}\" 스킬은 더 이상 전역이 아니며 이 워크스페이스의 스킬이 됩니다.",
+    "move_dialog_confirm": "워크스페이스로 이동",
+    "globalized_toast": "스킬이 전역으로 설정되었습니다",
+    "moved_to_workspace_toast": "스킬을 현재 워크스페이스로 이동했습니다",
+    "scope_failed_toast": "스킬 범위를 변경하지 못했습니다",
+    "saving_scope": "저장 중…",
     "refresh": "소스에서 업데이트",
     "my_agents": "내 에이전트",
     "other_agents": "다른 에이전트",

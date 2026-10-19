@@ -47,6 +47,7 @@
     "supporting_data_warning": "Certaines données de l'espace de travail n'ont pas pu être chargées. L'attribution des créateurs, les noms de runtimes ou les droits de modification peuvent apparaître incomplets."
   },
   "table": {
+    "global": "Global",
     "name": "Nom",
     "created_by": "Ajouté par",
     "used_by": "Utilisé par",
@@ -67,6 +68,19 @@
   "actions": {
     "row_menu": "Actions",
     "add_to_agent": "Ajouter à un agent",
+    "set_global": "Définir comme compétence globale",
+    "move_to_workspace": "Déplacer vers cet espace de travail",
+    "global_dialog_title": "Rendre cette compétence globale ?",
+    "global_dialog_description": "« {{name}} » sera disponible dans tous les espaces de travail. Tous les membres pourront l’ajouter à leurs agents ; seuls les propriétaires et administrateurs d’espace de travail pourront la modifier.",
+    "global_dialog_warning": "Cette action concerne tous les espaces de travail. Vous pourrez ensuite la déplacer vers un espace de travail.",
+    "global_dialog_confirm": "Rendre globale",
+    "move_dialog_title": "Déplacer cette compétence vers l’espace de travail actuel ?",
+    "move_dialog_description": "« {{name}} » ne sera plus globale et deviendra une compétence de cet espace de travail.",
+    "move_dialog_confirm": "Déplacer vers l’espace de travail",
+    "globalized_toast": "La compétence est maintenant globale",
+    "moved_to_workspace_toast": "Compétence déplacée vers cet espace de travail",
+    "scope_failed_toast": "Impossible de modifier la portée de la compétence",
+    "saving_scope": "Enregistrement…",
     "refresh": "Mettre à jour depuis la source",
     "my_agents": "Mes agents",
     "other_agents": "Autres agents",

@@ -3513,6 +3513,9 @@ export const SkillFileSchema = z.object({
 export const SkillSummarySchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
+  // Older backends have no global skills and omit this field entirely. The
+  // default keeps those responses parsing as ordinary workspace skills.
+  scope: z.enum(["workspace", "global"]).optional().default("workspace"),
   name: z.string(),
   description: z.string().optional().default(""),
   config: z.record(z.string(), z.unknown()).optional().default({}),
@@ -3529,6 +3532,7 @@ export const SkillSummarySchema = z.object({
 export const EMPTY_SKILL_SUMMARY: SkillSummary = {
   id: "",
   workspace_id: "",
+  scope: "workspace",
   name: "",
   description: "",
   config: {},

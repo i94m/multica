@@ -155,7 +155,7 @@ func (h *Handler) overwriteSkillWithFiles(ctx context.Context, input skillOverwr
 
 	qtx := h.Queries.WithTx(tx)
 
-	existing, err := qtx.GetSkillInWorkspace(ctx, db.GetSkillInWorkspaceParams{
+	existing, err := qtx.GetSkillVisibleInWorkspace(ctx, db.GetSkillVisibleInWorkspaceParams{
 		ID:          input.TargetSkillID,
 		WorkspaceID: input.WorkspaceID,
 	})

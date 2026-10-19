@@ -234,6 +234,11 @@ function NameCell({ row }: { row: SkillRow }) {
       <span className="min-w-0 truncate text-body font-medium">
         {skill.name}
       </span>
+      {skill.scope === "global" && (
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
+          {t(($) => $.table.global)}
+        </span>
+      )}
       {!canEdit && (
         <Tooltip>
           <TooltipTrigger

@@ -656,6 +656,8 @@ export interface AgentSkillSummary {
   id: string;
   name: string;
   description: string;
+  /** Global skills are shared by every workspace. Older servers omit it. */
+  scope?: SkillScope;
 	/** Older servers omit this field; consumers must treat that as enabled. */
 	enabled?: boolean;
 }
@@ -860,9 +862,17 @@ export interface UpdateAgentEnvRequest {
  * multica-ai/multica#2174). Use `Skill` from a detail endpoint when you need
  * the body. For skills embedded in an `Agent` payload see `AgentSkillSummary`.
  */
+/**
+ * A workspace skill belongs to exactly one workspace. A global skill belongs
+ * to no workspace and is visible to every workspace.
+ */
+export type SkillScope = "workspace" | "global";
+
 export interface SkillSummary {
   id: string;
   workspace_id: string;
+  /** Older server payloads omit this and are treated as workspace skills. */
+  scope?: SkillScope;
   name: string;
   description: string;
   config: Record<string, unknown>;

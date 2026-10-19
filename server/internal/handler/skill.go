@@ -45,8 +45,11 @@ func sanitizeNullBytes(s string) string {
 // --- Response structs ---
 
 type SkillResponse struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspace_id"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	// Scope is "workspace" for a normal skill and "global" for a skill with no
+	// owning workspace. Derived from WorkspaceID so the two cannot disagree.
+	Scope       string  `json:"scope"`
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Content     string  `json:"content"`
@@ -62,8 +65,10 @@ type SkillResponse struct {
 // links (GH multica-ai/multica#2174). Detail endpoints still return the full
 // SkillResponse with content.
 type SkillSummaryResponse struct {
-	ID          string  `json:"id"`
-	WorkspaceID string  `json:"workspace_id"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	// Scope is "workspace" or "global"; see SkillResponse.Scope.
+	Scope       string  `json:"scope"`
 	Name        string  `json:"name"`
 	Description string  `json:"description"`
 	Config      any     `json:"config"`
@@ -87,6 +92,7 @@ type SkillSummaryResponse struct {
 // SkillSummaryResponse for callers that need the source/origin info.
 type AgentSkillSummary struct {
 	ID          string `json:"id"`
+	Scope       string `json:"scope"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
@@ -170,10 +176,20 @@ func writeSkillImportDuplicateConflict(w http.ResponseWriter, existing ExistingS
 	})
 }
 
+// skillScope classifies a skill by its owning workspace. A NULL workspace is
+// the single source of truth for a global skill.
+func skillScope(workspaceID pgtype.UUID) string {
+	if workspaceID.Valid {
+		return "workspace"
+	}
+	return "global"
+}
+
 func skillToResponse(s db.Skill) SkillResponse {
 	return SkillResponse{
 		ID:          uuidToString(s.ID),
 		WorkspaceID: uuidToString(s.WorkspaceID),
+		Scope:       skillScope(s.WorkspaceID),
 		Name:        s.Name,
 		Description: s.Description,
 		Content:     s.Content,
@@ -233,6 +249,7 @@ func skillSummaryToResponse(
 	return SkillSummaryResponse{
 		ID:          uuidToString(id),
 		WorkspaceID: uuidToString(workspaceID),
+		Scope:       skillScope(workspaceID),
 		Name:        name,
 		Description: description,
 		Config:      decodeSkillConfig(config),
@@ -333,7 +350,7 @@ func (h *Handler) loadSkillForUser(w http.ResponseWriter, r *http.Request, id st
 		return db.Skill{}, false
 	}
 
-	skill, err := h.Queries.GetSkillInWorkspace(r.Context(), db.GetSkillInWorkspaceParams{
+	skill, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
 		ID:          skillUUID,
 		WorkspaceID: parseUUID(workspaceID),
 	})
@@ -581,8 +598,15 @@ func (h *Handler) CreateSkill(w http.ResponseWriter, r *http.Request) {
 
 // canManageSkill checks whether the current user can update or delete a skill.
 // The skill creator or workspace owner/admin can manage any skill.
+//
+// A global skill has no owning workspace, so its permission check runs against
+// the workspace the request is scoped to. That keeps the rule simple: whoever
+// administers the workspace they are currently in can manage the skill there.
 func (h *Handler) canManageSkill(w http.ResponseWriter, r *http.Request, skill db.Skill) bool {
 	wsID := uuidToString(skill.WorkspaceID)
+	if !skill.WorkspaceID.Valid {
+		wsID = h.resolveWorkspaceID(r)
+	}
 	member, ok := h.requireWorkspaceRole(w, r, wsID, "skill not found", "owner", "admin", "member")
 	if !ok {
 		return false
@@ -594,6 +618,13 @@ func (h *Handler) canManageSkill(w http.ResponseWriter, r *http.Request, skill d
 		return false
 	}
 	return true
+}
+
+// requireSkillAdmin is the narrower gate used by scope changes: globalizing or
+// demoting a skill affects every workspace, so the creator-only exception in
+// canManageSkill is not enough.
+func (h *Handler) requireSkillAdmin(w http.ResponseWriter, r *http.Request, workspaceID string) (db.Member, bool) {
+	return h.requireWorkspaceRole(w, r, workspaceID, "skill not found", "owner", "admin")
 }
 
 // canOverwriteSkillByLocalImport reports whether userID may overwrite skill via
@@ -707,9 +738,7 @@ func (h *Handler) UpdateSkill(w http.ResponseWriter, r *http.Request) {
 		SkillResponse: skillToResponse(skill),
 		Files:         fileResps,
 	}
-	wsID := h.resolveWorkspaceID(r)
-	actorType, actorID := h.resolveActor(r, requestUserID(r), wsID)
-	h.publish(protocol.EventSkillUpdated, wsID, actorType, actorID, map[string]any{"skill": resp})
+	h.publishSkillUpdated(r, skill, resp.SkillResponse)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -734,10 +763,15 @@ func (h *Handler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to remove skill label assignments")
 		return
 	}
-	if err := qtx.DeleteSkill(r.Context(), db.DeleteSkillParams{
-		ID:          skill.ID,
-		WorkspaceID: skill.WorkspaceID,
-	}); err != nil {
+	if skill.WorkspaceID.Valid {
+		if err := qtx.DeleteSkill(r.Context(), db.DeleteSkillParams{
+			ID:          skill.ID,
+			WorkspaceID: skill.WorkspaceID,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to delete skill")
+			return
+		}
+	} else if err := qtx.DeleteGlobalSkill(r.Context(), skill.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete skill")
 		return
 	}
@@ -745,7 +779,7 @@ func (h *Handler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to commit skill deletion")
 		return
 	}
-	actorType, actorID := h.resolveActor(r, requestUserID(r), uuidToString(skill.WorkspaceID))
+	actorType, actorID := h.resolveActor(r, requestUserID(r), h.resolveWorkspaceID(r))
 	h.publish(protocol.EventSkillDeleted, uuidToString(skill.WorkspaceID), actorType, actorID, map[string]any{"skill_id": uuidToString(skill.ID)})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -2560,6 +2594,8 @@ func (h *Handler) UpsertSkillFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorType, actorID := h.resolveActor(r, requestUserID(r), h.resolveWorkspaceID(r))
+	h.publish(protocol.EventSkillUpdated, uuidToString(skill.WorkspaceID), actorType, actorID, map[string]any{"skill_id": uuidToString(skill.ID)})
 	writeJSON(w, http.StatusOK, skillFileToResponse(sf))
 }
 
@@ -2589,6 +2625,8 @@ func (h *Handler) DeleteSkillFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete skill file")
 		return
 	}
+	actorType, actorID := h.resolveActor(r, requestUserID(r), h.resolveWorkspaceID(r))
+	h.publish(protocol.EventSkillUpdated, uuidToString(skill.WorkspaceID), actorType, actorID, map[string]any{"skill_id": uuidToString(skill.ID)})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -2793,7 +2831,7 @@ func (h *Handler) validateAgentSkillIDsInWorkspace(w http.ResponseWriter, r *htt
 			continue
 		}
 		seen[key] = struct{}{}
-		if _, err := h.Queries.GetSkillInWorkspace(r.Context(), db.GetSkillInWorkspaceParams{
+		if _, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
 			ID:          skillID,
 			WorkspaceID: agent.WorkspaceID,
 		}); err != nil {
