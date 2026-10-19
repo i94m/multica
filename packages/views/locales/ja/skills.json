@@ -47,6 +47,7 @@
     "supporting_data_warning": "一部のワークスペースデータを読み込めませんでした。作成者の表示、ランタイム名、編集権限が不完全に見える場合があります。"
   },
   "table": {
+    "global": "グローバル",
     "name": "名前",
     "created_by": "追加者",
     "used_by": "使用中",
@@ -67,6 +68,19 @@
   "actions": {
     "row_menu": "操作",
     "add_to_agent": "エージェントに追加",
+    "set_global": "グローバルスキルに設定",
+    "move_to_workspace": "現在のワークスペースに移動",
+    "global_dialog_title": "このスキルをグローバルにしますか？",
+    "global_dialog_description": "「{{name}}」はすべてのワークスペースで利用できるようになります。すべてのメンバーがエージェントに追加できますが、編集できるのはワークスペースの所有者と管理者だけです。",
+    "global_dialog_warning": "すべてのワークスペースに影響します。後でワークスペースに戻すことができます。",
+    "global_dialog_confirm": "グローバルにする",
+    "move_dialog_title": "このスキルを現在のワークスペースに移動しますか？",
+    "move_dialog_description": "「{{name}}」はグローバルではなくなり、このワークスペースのスキルになります。",
+    "move_dialog_confirm": "ワークスペースに移動",
+    "globalized_toast": "スキルをグローバルにしました",
+    "moved_to_workspace_toast": "スキルを現在のワークスペースに移動しました",
+    "scope_failed_toast": "スキルのスコープを変更できませんでした",
+    "saving_scope": "保存中…",
     "refresh": "ソースから更新",
     "my_agents": "自分のエージェント",
     "other_agents": "その他のエージェント",

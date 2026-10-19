@@ -47,6 +47,7 @@
     "supporting_data_warning": "部分工作区数据加载失败。创建者归属、运行时名称、编辑权限可能显示不完整。"
   },
   "table": {
+    "global": "全局",
     "name": "名称",
     "created_by": "添加者",
     "used_by": "被谁使用",
@@ -67,6 +68,19 @@
   "actions": {
     "row_menu": "操作",
     "add_to_agent": "添加到智能体",
+    "set_global": "设置为全局 Skill",
+    "move_to_workspace": "移动到当前工作区",
+    "global_dialog_title": "将此 Skill 设置为全局？",
+    "global_dialog_description": "“{{name}}”将对所有工作区可见。所有成员都可以将其添加到智能体，只有工作区所有者和管理员可以编辑。",
+    "global_dialog_warning": "此操作会影响所有工作区。之后可以将 Skill 移回某个工作区。",
+    "global_dialog_confirm": "设为全局",
+    "move_dialog_title": "将此 Skill 移动到当前工作区？",
+    "move_dialog_description": "“{{name}}”将不再是全局 Skill，而成为当前工作区的 Skill。",
+    "move_dialog_confirm": "移动到工作区",
+    "globalized_toast": "Skill 已设为全局",
+    "moved_to_workspace_toast": "Skill 已移动到当前工作区",
+    "scope_failed_toast": "修改 Skill 范围失败",
+    "saving_scope": "保存中…",
     "refresh": "从来源更新",
     "my_agents": "我的智能体",
     "other_agents": "其他智能体",

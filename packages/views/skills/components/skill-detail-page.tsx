@@ -7,6 +7,7 @@ import {
   Clock3,
   Download,
   FileText,
+  Globe,
   HardDrive,
   Loader2,
   Lock,
@@ -84,6 +85,7 @@ import {
   AddToAgentDialog,
   type SkillActionsContext,
 } from "./skill-list-actions";
+import { GlobalSkillScopeDialog } from "./global-skill-scope-dialog";
 import { RefreshSkillDialog } from "./refresh-skill-dialog";
 import { useT } from "../../i18n";
 import { ResourceLabelPicker } from "../../labels/resource-label-picker";
@@ -784,11 +786,12 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
     () => members.find((m) => m.user_id === currentUserId)?.role ?? null,
     [members, currentUserId],
   );
+  const isAdmin = myRole === "owner" || myRole === "admin";
   const actionsCtx: SkillActionsContext = {
     wsId,
     agents,
     currentUserId,
-    isAdmin: myRole === "owner" || myRole === "admin",
+    isAdmin,
   };
 
   const [name, setName] = useState("");
@@ -800,6 +803,7 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRefresh, setConfirmRefresh] = useState(false);
+  const [confirmScope, setConfirmScope] = useState(false);
   const [showAddToAgents, setShowAddToAgents] = useState(false);
   const [addingFile, setAddingFile] = useState(false);
   const [conflictPending, setConflictPending] = useState(false);
@@ -1160,8 +1164,15 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
       <BreadcrumbHeader
         segments={[{ href: paths.skills(), label: t(($) => $.page.title) }]}
         leaf={
-          <span className="truncate font-mono text-caption text-foreground">
-            {skill.name}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-mono text-caption text-foreground">
+              {skill.name}
+            </span>
+            {skill.scope === "global" && (
+              <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
+                {t(($) => $.table.global)}
+              </span>
+            )}
           </span>
         }
         actions={
@@ -1191,6 +1202,19 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
                   {t(($) => $.detail.refresh.tooltip)}
                 </TooltipContent>
               </Tooltip>
+            )}
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="xs"
+                className="gap-1"
+                onClick={() => setConfirmScope(true)}
+              >
+                <Globe className="h-3 w-3" />
+                {skill.scope === "global"
+                  ? t(($) => $.actions.move_to_workspace)
+                  : t(($) => $.actions.set_global)}
+              </Button>
             )}
             <Button
               variant="outline"
@@ -1440,6 +1464,13 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GlobalSkillScopeDialog
+        skill={skill}
+        wsId={wsId}
+        open={confirmScope}
+        onOpenChange={setConfirmScope}
+      />
 
       <AddToAgentDialog
         skills={[skill]}

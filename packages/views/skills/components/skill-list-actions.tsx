@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
+  Globe,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -53,6 +54,7 @@ import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../../i18n";
 import { useIntentNavigate } from "../../navigation";
 import { isRefreshableOrigin, readOrigin } from "../lib/origin";
+import { GlobalSkillScopeDialog } from "./global-skill-scope-dialog";
 import { RefreshSkillDialog } from "./refresh-skill-dialog";
 import type { SkillRow } from "./skill-list-filter";
 
@@ -656,6 +658,7 @@ export function SkillRowActions({
   const [addOpen, setAddOpen] = useState(false);
   const [refreshOpen, setRefreshOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   const origin = readOrigin(row.skill);
   const canRefresh = row.canEdit && isRefreshableOrigin(origin);
@@ -695,6 +698,14 @@ export function SkillRowActions({
             <Plus className="size-3.5" />
             {t(($) => $.actions.add_to_agent)}
           </DropdownMenuItem>
+          {ctx.isAdmin && (
+            <DropdownMenuItem onClick={() => setScopeOpen(true)}>
+              <Globe className="size-3.5" />
+              {row.skill.scope === "global"
+                ? t(($) => $.actions.move_to_workspace)
+                : t(($) => $.actions.set_global)}
+            </DropdownMenuItem>
+          )}
           {canRefresh && (
             <DropdownMenuItem onClick={() => setRefreshOpen(true)}>
               <RotateCw className="size-3.5" />
@@ -715,6 +726,12 @@ export function SkillRowActions({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <GlobalSkillScopeDialog
+        skill={row.skill}
+        wsId={ctx.wsId}
+        open={scopeOpen}
+        onOpenChange={setScopeOpen}
+      />
       <AddToAgentDialog
         skills={[row.skill]}
         ctx={ctx}
