@@ -1,8 +1,9 @@
 -- Skill CRUD
 
 -- name: ListSkillsByWorkspace :many
+-- Global skills (workspace_id IS NULL) are visible from every workspace.
 SELECT * FROM skill
-WHERE workspace_id = $1
+WHERE workspace_id = $1 OR workspace_id IS NULL
 ORDER BY name ASC;
 
 -- name: ListSkillSummariesByWorkspace :many
@@ -12,16 +13,18 @@ ORDER BY name ASC;
 -- and caused 15s CLI timeouts from high-latency regions (GH multica-ai/multica#2174).
 SELECT id, workspace_id, name, description, config, created_by, created_at, updated_at
 FROM skill
-WHERE workspace_id = $1
+WHERE workspace_id = $1 OR workspace_id IS NULL
 ORDER BY name ASC;
 
 -- name: GetSkill :one
 SELECT * FROM skill
 WHERE id = $1;
 
--- name: GetSkillInWorkspace :one
+-- name: GetSkillVisibleInWorkspace :one
+-- A skill is visible from a workspace when it belongs to that workspace or is
+-- global (workspace_id IS NULL).
 SELECT * FROM skill
-WHERE id = $1 AND workspace_id = $2;
+WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL);
 
 -- name: GetSkillByWorkspaceAndName :one
 -- Used by skill import and runtime-local skill discovery to reuse a workspace
@@ -47,6 +50,27 @@ RETURNING *;
 -- name: DeleteSkill :exec
 -- Defense-in-depth: workspace_id is a SQL-layer tenant guard. See DeleteIssue.
 DELETE FROM skill WHERE id = $1 AND workspace_id = $2;
+
+-- name: DeleteGlobalSkill :exec
+DELETE FROM skill WHERE id = $1 AND workspace_id IS NULL;
+
+-- name: PromoteSkillToGlobal :one
+-- The explicit workspace predicate makes promotion a no-op for a row that is
+-- already global or moved between workspaces.
+UPDATE skill SET
+    workspace_id = NULL,
+    updated_at = now()
+WHERE id = $1 AND workspace_id = $2
+RETURNING *;
+
+-- name: MoveSkillToWorkspace :one
+-- Demotion targets one workspace at a time; the caller chooses the current
+-- workspace. The NULL predicate prevents moving a workspace-owned skill.
+UPDATE skill SET
+    workspace_id = $2,
+    updated_at = now()
+WHERE id = $1 AND workspace_id IS NULL
+RETURNING *;
 
 -- Skill File CRUD
 
@@ -163,8 +187,10 @@ WHERE agent_id = $1 AND skill_id = $2;
 DELETE FROM agent_skill WHERE agent_id = $1;
 
 -- name: ListAgentSkillsByWorkspace :many
-SELECT ask.agent_id, s.id, s.name, s.description, ask.enabled
+-- Global skills are bindable from any workspace, so the batch agent-list read
+-- includes them alongside workspace-owned skills.
+SELECT ask.agent_id, s.id, s.workspace_id, s.name, s.description, ask.enabled
 FROM agent_skill ask
 JOIN skill s ON s.id = ask.skill_id
-WHERE s.workspace_id = $1
+WHERE s.workspace_id = $1 OR s.workspace_id IS NULL
 ORDER BY s.name ASC;

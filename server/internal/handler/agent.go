@@ -1159,6 +1159,7 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 		agentID := uuidToString(row.AgentID)
 		skillMap[agentID] = append(skillMap[agentID], AgentSkillSummary{
 			ID:          uuidToString(row.ID),
+			Scope:       skillScope(row.WorkspaceID),
 			Name:        row.Name,
 			Description: row.Description,
 			Enabled:     row.Enabled,
@@ -1558,7 +1559,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, skillID := range skillUUIDs {
-		if _, err := h.Queries.GetSkillInWorkspace(r.Context(), db.GetSkillInWorkspaceParams{
+		if _, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
 			ID:          skillID,
 			WorkspaceID: wsUUID,
 		}); err != nil {
@@ -2369,6 +2370,7 @@ func (h *Handler) attachAgentSkills(ctx context.Context, resp *AgentResponse, ag
 	for i, s := range skills {
 		out[i] = AgentSkillSummary{
 			ID:          uuidToString(s.ID),
+			Scope:       skillScope(s.WorkspaceID),
 			Name:        s.Name,
 			Description: s.Description,
 			Enabled:     s.Enabled,

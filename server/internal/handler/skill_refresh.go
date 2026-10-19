@@ -130,8 +130,9 @@ func (h *Handler) RefreshSkill(w http.ResponseWriter, r *http.Request) {
 
 	// Permission before any upstream fetch, so a forbidden caller cannot burn
 	// the 45s fetch budget. Mirrors canManageSkill, keeping the member row to
-	// re-check permission inside the overwrite transaction.
-	workspaceID := uuidToString(skill.WorkspaceID)
+	// re-check permission inside the overwrite transaction. Global skills use
+	// the current workspace for this check because they have no owner.
+	workspaceID := h.resolveWorkspaceID(r)
 	member, ok := h.requireWorkspaceRole(w, r, workspaceID, "skill not found", "owner", "admin", "member")
 	if !ok {
 		return
@@ -171,7 +172,7 @@ func (h *Handler) RefreshSkill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp, err := h.overwriteSkillWithFiles(r.Context(), skillOverwriteInput{
-		WorkspaceID:   skill.WorkspaceID,
+		WorkspaceID:   parseUUID(workspaceID),
 		TargetSkillID: skill.ID,
 		UserID:        userID,
 		NewName:       newName,
@@ -190,7 +191,7 @@ func (h *Handler) RefreshSkill(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, errSkillOverwriteForbidden):
 			writeError(w, http.StatusForbidden, "only the skill creator or a workspace admin can update this skill from its source")
 		case errors.Is(err, errSkillOverwriteNameConflict):
-			writeError(w, http.StatusConflict, "a skill named \""+newName+"\" already exists in this workspace")
+			writeError(w, http.StatusConflict, "a skill named \""+newName+"\" already exists")
 		default:
 			slog.Warn("update skill from source failed", append(logger.RequestAttrs(r), "error", err)...)
 			writeError(w, http.StatusInternalServerError, "failed to update skill from source")
@@ -199,6 +200,6 @@ func (h *Handler) RefreshSkill(w http.ResponseWriter, r *http.Request) {
 	}
 
 	actorType, actorID := h.resolveActor(r, userID, workspaceID)
-	h.publish(protocol.EventSkillUpdated, workspaceID, actorType, actorID, map[string]any{"skill": resp})
+	h.publish(protocol.EventSkillUpdated, uuidToString(skill.WorkspaceID), actorType, actorID, map[string]any{"skill": resp})
 	writeJSON(w, http.StatusOK, resp)
 }

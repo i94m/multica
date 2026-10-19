@@ -277,7 +277,10 @@ func registerListeners(bus *events.Bus, b realtime.Broadcaster) {
 		if e.WorkspaceID != "" {
 			realtime.M.RecordEvent(e.Type)
 			b.BroadcastToWorkspace(e.WorkspaceID, data)
-		} else if strings.HasPrefix(e.Type, "daemon:") {
+		} else if strings.HasPrefix(e.Type, "daemon:") || strings.HasPrefix(e.Type, "skill:") {
+			// Global skills have no owning workspace. Every workspace can see
+			// them, so every connected workspace client must invalidate its
+			// skill list when one changes.
 			realtime.M.RecordEvent(e.Type)
 			b.Broadcast(data)
 		}
