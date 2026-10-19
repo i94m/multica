@@ -26,6 +26,8 @@ export interface AgentDraft {
   name: string;
   description: string;
   instructions: string;
+  /** Optional role template; its prompt is composed before `instructions`. */
+  roleId?: string;
   conversationStarters: AgentConversationStarter[];
   avatarUrl: string | null;
   runtimeId: string;
@@ -45,6 +47,7 @@ export const EMPTY_AGENT_DRAFT: AgentDraft = {
   name: "",
   description: "",
   instructions: "",
+  roleId: "",
   conversationStarters: [],
   avatarUrl: null,
   runtimeId: "",
@@ -189,6 +192,7 @@ export function buildDuplicateDraft(
     name: `${source.name}${options.nameSuffix}`,
     description: source.description ?? "",
     instructions: source.instructions ?? "",
+    roleId: source.role_id ?? "",
     conversationStarters: (source.conversation_starters ?? []).map((item) => ({ ...item })),
     avatarUrl: source.avatar_url ?? null,
     runtimeId: keepsRuntime
@@ -220,6 +224,7 @@ export function buildCreateAgentRequest(options: {
     name: draft.name.trim(),
     description: draft.description.trim(),
     instructions: draft.instructions.trim() || undefined,
+    role_id: draft.roleId?.trim() || undefined,
     ...(draft.conversationStarters.length > 0
       ? {
           conversation_starters: draft.conversationStarters.map((item) => ({

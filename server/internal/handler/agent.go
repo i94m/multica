@@ -73,6 +73,9 @@ type AgentResponse struct {
 	// holds only the workspace's own notes — the product half lives in
 	// SystemInstructions and is never stored on the row.
 	Instructions string `json:"instructions"`
+	// RoleID is the explicit role this agent selects. The workspace default
+	// role is applied in addition at task-claim time and is not stored here.
+	RoleID string `json:"role_id,omitempty"`
 	// ConversationStarters are optional, agent-specific first-turn suggestions. An
 	// empty list tells clients to render their localized fallback prompts.
 	ConversationStarters []AgentConversationStarter `json:"conversation_starters"`
@@ -214,6 +217,7 @@ func (h *Handler) agentToResponse(a db.Agent) AgentResponse {
 		Name:                     a.Name,
 		Description:              a.Description,
 		Instructions:             a.Instructions,
+		RoleID:                   uuidToString(a.RoleID),
 		ConversationStarters:     conversationStarters,
 		SystemKey:                a.SystemKey.String,
 		SystemInstructions:       systemInstructionsFor(a),
@@ -1308,9 +1312,12 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateAgentRequest struct {
-	Name                 string                     `json:"name"`
-	Description          string                     `json:"description"`
-	Instructions         string                     `json:"instructions"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Instructions string `json:"instructions"`
+	// RoleID optionally binds a reusable role whose instructions are composed
+	// with this agent's own prompt at run time.
+	RoleID               *string                    `json:"role_id"`
 	ConversationStarters []AgentConversationStarter `json:"conversation_starters"`
 	AvatarURL            *string                    `json:"avatar_url"`
 	RuntimeID            string                     `json:"runtime_id"`
@@ -1573,6 +1580,23 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var roleID pgtype.UUID
+	if req.RoleID != nil && strings.TrimSpace(*req.RoleID) != "" {
+		roleUUID, ok := parseUUIDOrBadRequest(w, strings.TrimSpace(*req.RoleID), "role_id")
+		if !ok {
+			return
+		}
+		role, err := h.Queries.GetAgentRoleVisibleInWorkspace(r.Context(), db.GetAgentRoleVisibleInWorkspaceParams{
+			ID:          roleUUID,
+			WorkspaceID: wsUUID,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid role_id")
+			return
+		}
+		roleID = role.ID
+	}
+
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start agent create transaction")
@@ -1602,6 +1626,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		ServiceTier:              pgtype.Text{String: req.ServiceTier, Valid: req.ServiceTier != ""},
 		ConversationStarters:     sp,
 		ComposioToolkitAllowlist: allowlist,
+		RoleID:                   roleID,
 	})
 	if err != nil {
 		// Unique constraint on (workspace_id, name) — return a clear conflict error
@@ -1667,9 +1692,12 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateAgentRequest struct {
-	Name                 *string                     `json:"name"`
-	Description          *string                     `json:"description"`
-	Instructions         *string                     `json:"instructions"`
+	Name         *string `json:"name"`
+	Description  *string `json:"description"`
+	Instructions *string `json:"instructions"`
+	// RoleID is tri-state: omitted preserves, null/"" clears, a value binds the
+	// role. See RawFields["role_id"] for the omitted/null distinction.
+	RoleID               *string                     `json:"role_id"`
 	ConversationStarters *[]AgentConversationStarter `json:"conversation_starters"`
 	AvatarURL            *string                     `json:"avatar_url"`
 	RuntimeID            *string                     `json:"runtime_id"`
@@ -1924,6 +1952,23 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	params := db.UpdateAgentParams{
 		ID: existing.ID,
+	}
+	_, hasRoleField := rawFields["role_id"]
+	shouldClearRole := hasRoleField && (req.RoleID == nil || strings.TrimSpace(*req.RoleID) == "")
+	if hasRoleField && !shouldClearRole {
+		roleUUID, ok := parseUUIDOrBadRequest(w, strings.TrimSpace(*req.RoleID), "role_id")
+		if !ok {
+			return
+		}
+		role, err := h.Queries.GetAgentRoleVisibleInWorkspace(r.Context(), db.GetAgentRoleVisibleInWorkspaceParams{
+			ID:          roleUUID,
+			WorkspaceID: existing.WorkspaceID,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid role_id")
+			return
+		}
+		params.RoleID = role.ID
 	}
 	if req.Name != nil {
 		params.Name = pgtype.Text{String: *req.Name, Valid: true}
@@ -2276,7 +2321,16 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 
 	// Nullable runtime overrides: null/empty in the request means explicitly
 	// clear the field. COALESCE in UpdateAgent cannot set a column to NULL, so
-	// mcp_config, thinking_level, and service_tier use dedicated clear queries.
+	// mcp_config, thinking_level, service_tier, and role_id use dedicated
+	// clear queries.
+	if shouldClearRole {
+		updated, err = h.Queries.ClearAgentRole(r.Context(), updated.ID)
+		if err != nil {
+			slog.Warn("clear agent role failed", append(logger.RequestAttrs(r), "error", err, "agent_id", id)...)
+			writeError(w, http.StatusInternalServerError, "failed to clear role")
+			return
+		}
+	}
 	if shouldClearMcpConfig {
 		updated, err = h.Queries.ClearAgentMcpConfig(r.Context(), updated.ID)
 		if err != nil {

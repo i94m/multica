@@ -58,14 +58,15 @@ INSERT INTO agent (
     runtime_config, runtime_id, visibility, max_concurrent_tasks, owner_id,
     instructions, custom_env, custom_args, mcp_config, model, thinking_level,
     service_tier, conversation_starters,
-    composio_toolkit_allowlist, permission_mode
+    composio_toolkit_allowlist, permission_mode, role_id
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
     $11, $12, $13, $14, $15, $16,
     $17, COALESCE(sqlc.narg('conversation_starters')::jsonb, '[]'::jsonb),
     sqlc.narg('composio_toolkit_allowlist')::text[],
-    COALESCE(sqlc.narg('permission_mode'), 'private')
+    COALESCE(sqlc.narg('permission_mode'), 'private'),
+    sqlc.narg('role_id')
 )
 RETURNING *;
 
@@ -144,7 +145,15 @@ UPDATE agent SET
     service_tier = COALESCE(sqlc.narg('service_tier'), service_tier),
     conversation_starters = COALESCE(sqlc.narg('conversation_starters'), conversation_starters),
     composio_toolkit_allowlist = COALESCE(sqlc.narg('composio_toolkit_allowlist')::text[], composio_toolkit_allowlist),
+    role_id = COALESCE(sqlc.narg('role_id'), role_id),
     updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: ClearAgentRole :one
+-- Explicit NULL-clear for role_id. COALESCE-based UpdateAgent cannot set the
+-- column back to NULL, so the API routes "no role" through this query.
+UPDATE agent SET role_id = NULL, updated_at = now()
 WHERE id = $1
 RETURNING *;
 

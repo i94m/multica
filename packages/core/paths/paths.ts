@@ -34,6 +34,7 @@ function workspaceScoped(slug: string) {
     autopilots: () => `${ws}/autopilots`,
     autopilotDetail: (id: string) => `${ws}/autopilots/${encode(id)}`,
     agents: () => `${ws}/agents`,
+    roles: () => `${ws}/roles`,
     newAgent: () => `${ws}/agents/new`,
     // The two creation methods behind the chooser. Each is a real route so a
     // half-filled form survives a refresh and can be linked to directly.

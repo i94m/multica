@@ -29,6 +29,10 @@ export type {
 } from "./issue-workflow";
 export type {
   Agent,
+  AgentRole,
+  AgentRoleScope,
+  CreateAgentRoleRequest,
+  UpdateAgentRoleRequest,
   AgentConversationStarter,
   AgentStatus,
   AgentRuntimeMode,

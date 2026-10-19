@@ -625,6 +625,11 @@ WITH deleted_squads AS (
 )
 DELETE FROM skill WHERE skill.workspace_id = $1;
 
+-- name: DeleteWorkspaceAgentRoles :exec
+-- Roles have no workspace FK, so teardown removes them explicitly. Global
+-- roles (workspace_id IS NULL) deliberately survive every workspace delete.
+DELETE FROM agent_role WHERE agent_role.workspace_id = $1;
+
 -- name: DeleteWorkspacePluginData :exec
 -- Plugin relationships have no foreign keys or cascades. Storage and secrets
 -- hang off the installation, so both leaf tables are cleared through the

@@ -89,6 +89,8 @@ export function parseTabSubject(url: string): TabSubject {
       return id
         ? { kind: "actor", actorType: "agent", id }
         : { kind: "page", page: "agents" };
+    case "roles":
+      return { kind: "page", page: "roles" };
     case "members":
       // No members collection route exists; only `/members/:id`.
       return id ? { kind: "actor", actorType: "member", id } : { kind: "unknown" };

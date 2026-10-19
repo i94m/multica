@@ -151,6 +151,32 @@ describe("agent conversation starters", () => {
   });
 });
 
+describe("agent roles", () => {
+  it("carries the selected role into the create request", () => {
+    const request = buildCreateAgentRequest({
+      draft: { ...draft(), roleId: " role-1 " },
+      runtimeId: "runtime-1",
+    });
+
+    expect(request.role_id).toBe("role-1");
+  });
+
+  it("copies the source role when duplicating", () => {
+    const duplicate = buildDuplicateDraft(sourceAgent({ role_id: "role-1" }), {
+      runtimes: [CODEX_RUNTIME],
+      currentUserId: "user-1",
+      fallbackRuntimeId: "runtime-2",
+      nameSuffix: " (Copy)",
+    });
+
+    expect(duplicate.roleId).toBe("role-1");
+    expect(
+      buildCreateAgentRequest({ draft: duplicate, runtimeId: "runtime-1" })
+        .role_id,
+    ).toBe("role-1");
+  });
+});
+
 // MUL-5390: thinking_level / service_tier are runtime + model scoped. The create
 // flow never exposed them, so a Fast Codex agent could only be configured after
 // the fact and a Duplicate silently dropped the setting.

@@ -507,6 +507,9 @@ export interface Agent {
   /** What this agent's owner wrote. For a system agent this holds only the
    *  workspace's own notes — the product half is `system_instructions`. */
   instructions: string;
+  /** Optional reusable role bound to this agent. The workspace default role is
+   *  applied in addition at run time, so an empty value still inherits it. */
+  role_id?: string;
   /** Up to three agent-authored first-turn suggestions. Older servers omit it. */
   conversation_starters?: AgentConversationStarter[];
   /** Set for product-defined agents (e.g. "mika"). Absent for user- and
@@ -662,10 +665,44 @@ export interface AgentSkillSummary {
 	enabled?: boolean;
 }
 
+/** Reusable role prompt. A global role is visible from every workspace. */
+export type AgentRoleScope = "workspace" | "global";
+
+export interface AgentRole {
+  id: string;
+  /** Empty for a global role. */
+  workspace_id: string;
+  scope: AgentRoleScope;
+  name: string;
+  description: string;
+  instructions: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  /** True when this role is the workspace's inherited default. */
+  is_default: boolean;
+  /** Number of agents explicitly bound to this role. */
+  agent_count: number;
+}
+
+export interface CreateAgentRoleRequest {
+  name: string;
+  description: string;
+  instructions: string;
+  scope: AgentRoleScope;
+}
+
+export interface UpdateAgentRoleRequest {
+  name: string;
+  description: string;
+  instructions: string;
+}
+
 export interface CreateAgentRequest {
   name: string;
   description?: string;
   instructions?: string;
+  role_id?: string;
   conversation_starters?: AgentConversationStarter[];
   avatar_url?: string;
   runtime_id: string;
@@ -719,6 +756,8 @@ export interface StoredAgentDraft {
   name: string;
   description: string;
   instructions: string;
+  /** Optional role template; omitted for legacy drafts. */
+  role_id?: string;
   conversation_starters: AgentConversationStarter[];
   avatar_url: string | null;
   model: string;
@@ -764,6 +803,8 @@ export interface UpdateAgentRequest {
   name?: string;
   description?: string;
   instructions?: string;
+  /** Omitted preserves, null clears, a value binds the role. */
+  role_id?: string | null;
   conversation_starters?: AgentConversationStarter[];
   avatar_url?: string;
   runtime_id?: string;

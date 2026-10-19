@@ -27,6 +27,7 @@ import { ThinkingSettingField } from "../components/inspector/thinking-prop-row"
 import { ModelDropdown } from "../components/model-dropdown";
 import { RuntimePicker } from "../components/runtime-picker";
 import { SkillMultiSelect } from "../components/skill-multi-select";
+import { AgentRoleSelect } from "../components/agent-role-select";
 import { ConversationStartersEditor } from "../components/conversation-starters-editor";
 
 const PERMISSION_SCOPES: AgentPermissionScope[] = [
@@ -157,6 +158,17 @@ export function AgentConfigurationPanel({
         title={t(($) => $.creation_studio.sections.behavior)}
       >
         <SettingsCard>
+          <DraftFieldRow
+            compact={compact}
+            label={t(($) => $.role_select.label)}
+            htmlFor="agent-create-role"
+          >
+            <AgentRoleSelect
+              id="agent-create-role"
+              value={draft.roleId}
+              onChange={(roleId) => set("roleId", roleId ?? "")}
+            />
+          </DraftFieldRow>
           <DraftFieldRow
             compact
             label={t(($) => $.create_dialog.instructions.label)}

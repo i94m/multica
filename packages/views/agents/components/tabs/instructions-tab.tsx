@@ -12,6 +12,7 @@ import { useT } from "../../../i18n";
 import { useOptionalNavigation } from "../../../navigation";
 
 import { ConversationStartersEditor } from "../conversation-starters-editor";
+import { AgentRoleSelect } from "../agent-role-select";
 
 /** How long the deep-linked conversation-starters editor stays ringed. */
 const FOCUS_FLASH_MS = 1600;
@@ -24,6 +25,7 @@ export function InstructionsTab({
   agent: Agent;
   onSave: (updates: {
     instructions: string;
+    role_id?: string | null;
     conversation_starters?: AgentConversationStarter[];
   }) => Promise<void>;
   onDirtyChange?: (dirty: boolean) => void;
@@ -37,6 +39,7 @@ export function InstructionsTab({
     (state) => state.agentConversationStartersSupported,
   );
   const [value, setValue] = useState(agent.instructions ?? "");
+  const [roleId, setRoleId] = useState(agent.role_id ?? "");
   const [conversationStarters, setConversationStarters] = useState<AgentConversationStarter[]>(
     agent.conversation_starters ?? [],
   );
@@ -52,18 +55,22 @@ export function InstructionsTab({
   const persistedRef = useRef({
     agentId: agent.id,
     instructions: agent.instructions ?? "",
+    roleId: agent.role_id ?? "",
     conversationStartersKey: persistedConversationStartersKey,
   });
   const localRef = useRef({
     instructions: value,
+    roleId,
     conversationStartersKey: JSON.stringify(conversationStarters),
   });
   localRef.current = {
     instructions: value,
+    roleId,
     conversationStartersKey: JSON.stringify(conversationStarters),
   };
   const isDirty =
     value !== (agent.instructions ?? "") ||
+    roleId !== (agent.role_id ?? "") ||
     (conversationStartersSupported &&
       JSON.stringify(conversationStarters) !== persistedConversationStartersKey);
   const conversationStartersValid =
@@ -95,23 +102,27 @@ export function InstructionsTab({
     const local = localRef.current;
     const wasLocallyDirty =
       local.instructions !== previous.instructions ||
+      local.roleId !== previous.roleId ||
       local.conversationStartersKey !== previous.conversationStartersKey;
     const persistedContentsChanged =
       previous.instructions !== (agent.instructions ?? "") ||
+      previous.roleId !== (agent.role_id ?? "") ||
       previous.conversationStartersKey !== persistedConversationStartersKey;
 
     persistedRef.current = {
       agentId: agent.id,
       instructions: agent.instructions ?? "",
+      roleId: agent.role_id ?? "",
       conversationStartersKey: persistedConversationStartersKey,
     };
     if (switchingAgents || (!wasLocallyDirty && persistedContentsChanged)) {
       setValue(agent.instructions ?? "");
+      setRoleId(agent.role_id ?? "");
       setConversationStarters(
         JSON.parse(persistedConversationStartersKey) as AgentConversationStarter[],
       );
     }
-  }, [agent.id, agent.instructions, persistedConversationStartersKey, saving]);
+  }, [agent.id, agent.instructions, agent.role_id, persistedConversationStartersKey, saving]);
 
   // Arriving from "customize" in a chat's empty state: bring the starter
   // prompts into view and flash them, so the deep link lands ON the setting
@@ -176,6 +187,9 @@ export function InstructionsTab({
     try {
       await onSave({
         instructions: value,
+        ...(roleId !== (agent.role_id ?? "")
+          ? { role_id: roleId || null }
+          : {}),
         ...(conversationStartersSupported
           ? { conversation_starters: conversationStarters }
           : {}),
@@ -223,6 +237,22 @@ export function InstructionsTab({
           )}
         </div>
       )}
+
+      {!hasSystemLayer ? (
+        <div className="max-w-md space-y-2">
+          <label
+            htmlFor={`agent-role-${agent.id}`}
+            className="text-body font-medium"
+          >
+            {t(($) => $.role_select.label)}
+          </label>
+          <AgentRoleSelect
+            id={`agent-role-${agent.id}`}
+            value={roleId}
+            onChange={(next) => setRoleId(next ?? "")}
+          />
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <label

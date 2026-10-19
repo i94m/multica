@@ -2250,6 +2250,18 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			})
 
 			// Agents
+			// Reusable role prompts. Listing is member-visible; every write is
+			// gated to workspace owner/admin inside the handlers.
+			r.Route("/api/agent-roles", func(r chi.Router) {
+				r.Get("/", h.ListAgentRoles)
+				r.Post("/", h.CreateAgentRole)
+				r.Put("/default", h.SetDefaultAgentRole)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Put("/", h.UpdateAgentRole)
+					r.Delete("/", h.DeleteAgentRole)
+				})
+			})
+
 			r.Route("/api/agents", func(r chi.Router) {
 				r.Get("/", h.ListAgents)
 				r.Post("/", h.CreateAgent)

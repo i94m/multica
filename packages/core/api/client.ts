@@ -66,6 +66,9 @@ import type {
   User,
   Skill,
   SkillSummary,
+  AgentRole,
+  CreateAgentRoleRequest,
+  UpdateAgentRoleRequest,
   CreateSkillRequest,
   UpdateSkillRequest,
   SetAgentSkillsRequest,
@@ -3521,6 +3524,39 @@ export class ApiClient {
     });
     return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
       endpoint: "PUT /api/skills/:id/scope",
+    });
+  }
+
+  async listAgentRoles(): Promise<AgentRole[]> {
+    return this.fetch("/api/agent-roles");
+  }
+
+  async createAgentRole(data: CreateAgentRoleRequest): Promise<AgentRole> {
+    return this.fetch("/api/agent-roles", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAgentRole(
+    id: string,
+    data: UpdateAgentRoleRequest,
+  ): Promise<AgentRole> {
+    return this.fetch(`/api/agent-roles/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAgentRole(id: string): Promise<void> {
+    await this.fetch(`/api/agent-roles/${id}`, { method: "DELETE" });
+  }
+
+  /** Set the workspace default role; `null` clears it. */
+  async setDefaultAgentRole(roleId: string | null): Promise<void> {
+    await this.fetch("/api/agent-roles/default", {
+      method: "PUT",
+      body: JSON.stringify({ role_id: roleId ?? "" }),
     });
   }
 

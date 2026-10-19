@@ -108,6 +108,17 @@ func (q *Queries) DeleteWorkspaceAdministration(ctx context.Context, workspaceID
 	return err
 }
 
+const deleteWorkspaceAgentRoles = `-- name: DeleteWorkspaceAgentRoles :exec
+DELETE FROM agent_role WHERE agent_role.workspace_id = $1
+`
+
+// Roles have no workspace FK, so teardown removes them explicitly. Global
+// roles (workspace_id IS NULL) deliberately survive every workspace delete.
+func (q *Queries) DeleteWorkspaceAgentRoles(ctx context.Context, workspaceID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteWorkspaceAgentRoles, workspaceID)
+	return err
+}
+
 const deleteWorkspaceAgents = `-- name: DeleteWorkspaceAgents :exec
 DELETE FROM agent WHERE agent.workspace_id = $1
 `
