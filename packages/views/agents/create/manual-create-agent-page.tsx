@@ -104,11 +104,9 @@ export function ManualCreateAgentPage() {
             : t(($) => $.creation_studio.title)
       }
       step={t(($) => $.creation_studio.step_configure)}
-      // A duplicate arrives from the agents list, not from the chooser, so it
-      // returns to where it came from instead of offering a method to pick.
-      onBack={() =>
-        backOrReplace(duplicateId ? paths.agents() : paths.newAgent())
-      }
+      // The manual form is entered directly from the agents list, so back
+      // returns there instead of to the method chooser.
+      onBack={() => backOrReplace(paths.agents())}
       chips={
         <>
           <AgentCreateChip>

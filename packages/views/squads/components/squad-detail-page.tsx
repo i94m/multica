@@ -243,7 +243,11 @@ export function SquadDetailPage() {
           isArchived={isArchived}
           getEntityName={getEntityName}
           onAddMemberClick={() => setShowAddMember(true)}
-          createAgentHref={canManage ? `${p.newAgent()}?squad=${encodeURIComponent(squadId)}` : undefined}
+          createAgentHref={
+            canManage
+              ? `${p.newAgentManual()}?squad=${encodeURIComponent(squadId)}`
+              : undefined
+          }
           onSetLeader={(id) => setLeaderMut.mutate(id)}
           onRemoveMember={(m) => removeMemberMut.mutate(m)}
           onUpdateRole={async (m, role) => { await updateRoleMut.mutateAsync({ member: m, role }); }}

@@ -993,7 +993,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
   if (listError) {
     return (
       <ListError
-        onCreate={() => navigation.push(paths.newAgent())}
+        onCreate={() => navigation.push(paths.newAgentManual())}
         listError={listError}
         onRetry={() => refetchList()}
       />
@@ -1030,7 +1030,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     <div className="relative flex flex-1 min-h-0 flex-col">
       <PageHeaderBar
         totalCount={totalCount}
-        onCreate={() => navigation.push(paths.newAgent())}
+        onCreate={() => navigation.push(paths.newAgentManual())}
       />
 
       {isLoading || (!showEmpty && !listReady) ? (
@@ -1039,7 +1039,9 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
         </div>
       ) : showEmpty ? (
         <div className="flex flex-1 items-center justify-center">
-          <EmptyState onCreate={() => navigation.push(paths.newAgent())} />
+          <EmptyState
+            onCreate={() => navigation.push(paths.newAgentManual())}
+          />
         </div>
       ) : (
         <>
