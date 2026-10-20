@@ -34,9 +34,16 @@ export function AgentRoleSelect({
   const { t } = useT("agents");
   const { data: roles = [], isLoading } = useQuery(agentRoleListOptions(wsId));
   const defaultRole = roles.find((role) => role.is_default);
+  // Global roles are workspace-wide defaults, not per-agent choices. They stay
+  // visible on the Roles page and as the inherited default, but the agent
+  // picker only offers roles owned by this workspace.
+  const selectableRoles = roles.filter((role) => role.scope !== "global");
+  const selectedValue = selectableRoles.some((role) => role.id === value)
+    ? (value as string)
+    : NO_ROLE;
   const items = [
     { value: NO_ROLE, label: t(($) => $.role_select.none) },
-    ...roles.map((role) => ({
+    ...selectableRoles.map((role) => ({
       value: role.id,
       label: role.is_default
         ? `${role.name}${t(($) => $.role_select.default_suffix)}`
@@ -48,7 +55,7 @@ export function AgentRoleSelect({
     <div className="space-y-1.5">
       <Select
         items={items}
-        value={value || NO_ROLE}
+        value={selectedValue}
         onValueChange={(next) =>
           onChange(next === NO_ROLE ? null : (next as string))
         }
