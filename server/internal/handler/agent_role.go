@@ -51,6 +51,9 @@ type updateAgentRoleRequest struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	Instructions string `json:"instructions"`
+	// Scope is "workspace" or "global". Empty preserves the current scope for
+	// callers that predate the field.
+	Scope string `json:"scope"`
 }
 
 type setDefaultAgentRoleRequest struct {
@@ -249,11 +252,56 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	updated, err := h.Queries.UpdateAgentRole(r.Context(), db.UpdateAgentRoleParams{
+	scope := strings.TrimSpace(req.Scope)
+	if scope == "" {
+		scope = agentRoleScope(role.WorkspaceID)
+	}
+	if scope != "workspace" && scope != "global" {
+		writeError(w, http.StatusBadRequest, `scope must be "workspace" or "global"`)
+		return
+	}
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+	if !ok {
+		return
+	}
+	targetWorkspace := pgtype.UUID{}
+	if scope == "workspace" {
+		targetWorkspace = wsUUID
+	}
+
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	// A global role becoming workspace-owned must release every binding outside
+	// the target workspace; their owners can no longer resolve the role.
+	if !role.WorkspaceID.Valid && scope == "workspace" {
+		if err := qtx.ClearAgentRoleReferencesOutsideWorkspace(r.Context(), db.ClearAgentRoleReferencesOutsideWorkspaceParams{
+			RoleID:      role.ID,
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to detach role from other workspaces")
+			return
+		}
+		if err := qtx.ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace(r.Context(), db.ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams{
+			RoleID:      role.ID,
+			WorkspaceID: wsUUID,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to clear default role in other workspaces")
+			return
+		}
+	}
+
+	updated, err := qtx.UpdateAgentRole(r.Context(), db.UpdateAgentRoleParams{
 		ID:           role.ID,
 		Name:         name,
 		Description:  description,
 		Instructions: instructions,
+		WorkspaceID:  targetWorkspace,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -261,6 +309,10 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "failed to update role")
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit role update")
 		return
 	}
 	isDefault, count := h.roleDefaultAndCount(r.Context(), role.ID, workspaceID)

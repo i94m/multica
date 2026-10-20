@@ -696,6 +696,7 @@ export interface UpdateAgentRoleRequest {
   name: string;
   description: string;
   instructions: string;
+  scope: AgentRoleScope;
 }
 
 export interface CreateAgentRequest {

@@ -38,10 +38,13 @@ INSERT INTO agent_role (
 RETURNING *;
 
 -- name: UpdateAgentRole :one
+-- workspace_id is set explicitly so the same statement can promote a workspace
+-- role to global (NULL) or claim a global role into one workspace.
 UPDATE agent_role SET
     name = @name,
     description = @description,
     instructions = @instructions,
+    workspace_id = sqlc.narg('workspace_id'),
     updated_at = now()
 WHERE id = @id
 RETURNING *;
@@ -67,3 +70,14 @@ WHERE id = $1;
 
 -- name: CountAgentsUsingRole :one
 SELECT count(*) FROM agent WHERE role_id = $1;
+
+-- name: ClearAgentRoleReferencesOutsideWorkspace :exec
+-- Used when a global role becomes workspace-owned: agents elsewhere must not
+-- keep a binding they can no longer resolve.
+UPDATE agent SET role_id = NULL, updated_at = now()
+WHERE role_id = @role_id AND workspace_id <> @workspace_id;
+
+-- name: ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace :exec
+-- Same transition at the workspace-default layer.
+UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
+WHERE default_agent_role_id = @role_id AND id <> @workspace_id;

@@ -116,6 +116,7 @@ export function RolesPage() {
             name,
             description: draft.description,
             instructions: draft.instructions,
+            scope: draft.scope,
           },
         });
       } else {
@@ -243,41 +244,47 @@ export function RolesPage() {
                 }
               />
             </label>
-            {!editing ? (
-              <label className="block space-y-1.5">
-                <span className="text-body font-medium">
-                  {t(($) => $.roles.scope)}
-                </span>
-                <Select
-                  items={[
-                    {
-                      value: "workspace",
-                      label: t(($) => $.roles.scope_workspace),
-                    },
-                    { value: "global", label: t(($) => $.roles.scope_global) },
-                  ]}
-                  value={draft.scope}
-                  onValueChange={(value) =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      scope: value as AgentRoleScope,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full" size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="workspace">
-                      {t(($) => $.roles.scope_workspace)}
-                    </SelectItem>
-                    <SelectItem value="global">
-                      {t(($) => $.roles.scope_global)}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
-            ) : null}
+            <label className="block space-y-1.5">
+              <span className="text-body font-medium">
+                {t(($) => $.roles.scope)}
+              </span>
+              <Select
+                items={[
+                  {
+                    value: "workspace",
+                    label: t(($) => $.roles.scope_workspace),
+                  },
+                  { value: "global", label: t(($) => $.roles.scope_global) },
+                ]}
+                value={draft.scope}
+                onValueChange={(value) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    scope: value as AgentRoleScope,
+                  }))
+                }
+              >
+                <SelectTrigger className="w-full" size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="workspace">
+                    {t(($) => $.roles.scope_workspace)}
+                  </SelectItem>
+                  <SelectItem value="global">
+                    {t(($) => $.roles.scope_global)}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-caption text-muted-foreground">
+                {t(($) => $.roles.scope_hint)}
+              </p>
+              {editing?.scope === "global" && draft.scope === "workspace" ? (
+                <p className="text-caption text-warning">
+                  {t(($) => $.roles.scope_change_warning)}
+                </p>
+              ) : null}
+            </label>
             <label className="block space-y-1.5">
               <span className="text-body font-medium">
                 {t(($) => $.roles.description)}

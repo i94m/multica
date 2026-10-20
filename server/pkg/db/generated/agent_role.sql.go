@@ -21,6 +21,23 @@ func (q *Queries) ClearAgentRoleReferences(ctx context.Context, roleID pgtype.UU
 	return err
 }
 
+const clearAgentRoleReferencesOutsideWorkspace = `-- name: ClearAgentRoleReferencesOutsideWorkspace :exec
+UPDATE agent SET role_id = NULL, updated_at = now()
+WHERE role_id = $1 AND workspace_id <> $2
+`
+
+type ClearAgentRoleReferencesOutsideWorkspaceParams struct {
+	RoleID      pgtype.UUID `json:"role_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Used when a global role becomes workspace-owned: agents elsewhere must not
+// keep a binding they can no longer resolve.
+func (q *Queries) ClearAgentRoleReferencesOutsideWorkspace(ctx context.Context, arg ClearAgentRoleReferencesOutsideWorkspaceParams) error {
+	_, err := q.db.Exec(ctx, clearAgentRoleReferencesOutsideWorkspace, arg.RoleID, arg.WorkspaceID)
+	return err
+}
+
 const clearWorkspaceDefaultAgentRole = `-- name: ClearWorkspaceDefaultAgentRole :exec
 UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
 WHERE id = $1
@@ -38,6 +55,22 @@ WHERE default_agent_role_id = $1
 
 func (q *Queries) ClearWorkspaceDefaultAgentRoleReferences(ctx context.Context, defaultAgentRoleID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, clearWorkspaceDefaultAgentRoleReferences, defaultAgentRoleID)
+	return err
+}
+
+const clearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace = `-- name: ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace :exec
+UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
+WHERE default_agent_role_id = $1 AND id <> $2
+`
+
+type ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams struct {
+	RoleID      pgtype.UUID `json:"role_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Same transition at the workspace-default layer.
+func (q *Queries) ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace(ctx context.Context, arg ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams) error {
+	_, err := q.db.Exec(ctx, clearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace, arg.RoleID, arg.WorkspaceID)
 	return err
 }
 
@@ -260,8 +293,9 @@ UPDATE agent_role SET
     name = $1,
     description = $2,
     instructions = $3,
+    workspace_id = $4,
     updated_at = now()
-WHERE id = $4
+WHERE id = $5
 RETURNING id, workspace_id, name, description, instructions, created_by, created_at, updated_at
 `
 
@@ -269,14 +303,18 @@ type UpdateAgentRoleParams struct {
 	Name         string      `json:"name"`
 	Description  string      `json:"description"`
 	Instructions string      `json:"instructions"`
+	WorkspaceID  pgtype.UUID `json:"workspace_id"`
 	ID           pgtype.UUID `json:"id"`
 }
 
+// workspace_id is set explicitly so the same statement can promote a workspace
+// role to global (NULL) or claim a global role into one workspace.
 func (q *Queries) UpdateAgentRole(ctx context.Context, arg UpdateAgentRoleParams) (AgentRole, error) {
 	row := q.db.QueryRow(ctx, updateAgentRole,
 		arg.Name,
 		arg.Description,
 		arg.Instructions,
+		arg.WorkspaceID,
 		arg.ID,
 	)
 	var i AgentRole
