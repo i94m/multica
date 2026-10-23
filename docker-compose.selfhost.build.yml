@@ -11,6 +11,9 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
         DATE: ${DATE:-unknown}
+        # proxy.golang.org is unreachable on some self-host networks; the
+        # module download fails the build without a reachable proxy.
+        GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
 
   frontend:
     image: multica-web:dev
