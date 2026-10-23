@@ -58,7 +58,7 @@ export function AgentRoleSelect({
   ];
 
   return (
-    <div className="space-y-1.5">
+    <div>
       <div className="flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <Select
@@ -107,6 +107,9 @@ export function AgentRoleSelect({
           </Popover>
         ) : null}
       </div>
+      <p className="mt-1 text-caption leading-5 text-muted-foreground">
+        {t(($) => $.role_select.hint)}
+      </p>
     </div>
   );
 }

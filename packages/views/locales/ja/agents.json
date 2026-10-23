@@ -967,6 +967,7 @@
   },
   "role_select": {
     "label": "ロール",
+    "hint": "ロールを選択すると、毎回そのロールの指示が自動で読み込まれます。",
     "none": "ロールなし",
     "view_instructions": "ロールの指示を表示",
     "no_instructions": "このロールには指示がありません。"

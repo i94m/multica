@@ -989,6 +989,7 @@
   },
   "role_select": {
     "label": "Rôle",
+    "hint": "La sélection d’un rôle charge automatiquement son prompt à chaque exécution.",
     "none": "Aucun rôle",
     "view_instructions": "Voir les instructions du rôle",
     "no_instructions": "Ce rôle n’a pas d’instructions."

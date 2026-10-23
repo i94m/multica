@@ -967,6 +967,7 @@
   },
   "role_select": {
     "label": "角色",
+    "hint": "选择角色后，每次运行会自动加载该角色对应的提示词。",
     "none": "不使用角色",
     "view_instructions": "查看角色提示词",
     "no_instructions": "该角色没有提示词。"

@@ -967,6 +967,7 @@
   },
   "role_select": {
     "label": "역할",
+    "hint": "역할을 선택하면 매 실행 시 해당 역할의 지침이 자동으로 로드됩니다.",
     "none": "역할 없음",
     "view_instructions": "역할 지침 보기",
     "no_instructions": "이 역할에는 지침이 없습니다."
