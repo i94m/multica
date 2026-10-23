@@ -2257,7 +2257,6 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			r.Route("/api/agent-roles", func(r chi.Router) {
 				r.Get("/", h.ListAgentRoles)
 				r.Post("/", h.CreateAgentRole)
-				r.Put("/default", h.SetDefaultAgentRole)
 				r.Route("/{id}", func(r chi.Router) {
 					r.Put("/", h.UpdateAgentRole)
 					r.Delete("/", h.DeleteAgentRole)

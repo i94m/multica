@@ -680,8 +680,6 @@ export interface AgentRole {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  /** True when this role is the workspace's inherited default. */
-  is_default: boolean;
   /** Number of agents explicitly bound to this role. */
   agent_count: number;
 }

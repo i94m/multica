@@ -38,42 +38,6 @@ func (q *Queries) ClearAgentRoleReferencesOutsideWorkspace(ctx context.Context, 
 	return err
 }
 
-const clearWorkspaceDefaultAgentRole = `-- name: ClearWorkspaceDefaultAgentRole :exec
-UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
-WHERE id = $1
-`
-
-func (q *Queries) ClearWorkspaceDefaultAgentRole(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, clearWorkspaceDefaultAgentRole, id)
-	return err
-}
-
-const clearWorkspaceDefaultAgentRoleReferences = `-- name: ClearWorkspaceDefaultAgentRoleReferences :exec
-UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
-WHERE default_agent_role_id = $1
-`
-
-func (q *Queries) ClearWorkspaceDefaultAgentRoleReferences(ctx context.Context, defaultAgentRoleID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, clearWorkspaceDefaultAgentRoleReferences, defaultAgentRoleID)
-	return err
-}
-
-const clearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace = `-- name: ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace :exec
-UPDATE workspace SET default_agent_role_id = NULL, updated_at = now()
-WHERE default_agent_role_id = $1 AND id <> $2
-`
-
-type ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams struct {
-	RoleID      pgtype.UUID `json:"role_id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-// Same transition at the workspace-default layer.
-func (q *Queries) ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace(ctx context.Context, arg ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams) error {
-	_, err := q.db.Exec(ctx, clearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace, arg.RoleID, arg.WorkspaceID)
-	return err
-}
-
 const countAgentsUsingRole = `-- name: CountAgentsUsingRole :one
 SELECT count(*) FROM agent WHERE role_id = $1
 `
@@ -179,48 +143,12 @@ func (q *Queries) GetAgentRoleVisibleInWorkspace(ctx context.Context, arg GetAge
 	return i, err
 }
 
-const getWorkspaceDefaultAgentRole = `-- name: GetWorkspaceDefaultAgentRole :one
-SELECT r.id, r.workspace_id, r.name, r.description, r.instructions, r.created_by, r.created_at, r.updated_at
-FROM agent_role r
-JOIN workspace w ON w.default_agent_role_id = r.id
-WHERE w.id = $1
-`
-
-func (q *Queries) GetWorkspaceDefaultAgentRole(ctx context.Context, id pgtype.UUID) (AgentRole, error) {
-	row := q.db.QueryRow(ctx, getWorkspaceDefaultAgentRole, id)
-	var i AgentRole
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Name,
-		&i.Description,
-		&i.Instructions,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getWorkspaceDefaultAgentRoleID = `-- name: GetWorkspaceDefaultAgentRoleID :one
-SELECT default_agent_role_id FROM workspace WHERE id = $1
-`
-
-func (q *Queries) GetWorkspaceDefaultAgentRoleID(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, getWorkspaceDefaultAgentRoleID, id)
-	var default_agent_role_id pgtype.UUID
-	err := row.Scan(&default_agent_role_id)
-	return default_agent_role_id, err
-}
-
 const listAgentRoles = `-- name: ListAgentRoles :many
 
 SELECT
     r.id, r.workspace_id, r.name, r.description, r.instructions, r.created_by, r.created_at, r.updated_at,
-    CASE WHEN r.id = w.default_agent_role_id THEN true ELSE false END AS is_default,
     (SELECT count(*) FROM agent a WHERE a.role_id = r.id) AS agent_count
 FROM agent_role r
-JOIN workspace w ON w.id = $1
 WHERE r.workspace_id = $1 OR r.workspace_id IS NULL
 ORDER BY (r.workspace_id IS NULL), lower(r.name)
 `
@@ -234,14 +162,11 @@ type ListAgentRolesRow struct {
 	CreatedBy    pgtype.UUID        `json:"created_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	IsDefault    bool               `json:"is_default"`
 	AgentCount   int64              `json:"agent_count"`
 }
 
 // Reusable agent roles. A NULL workspace_id marks a global role.
-// One workspace's roles plus every global role. `is_default` is computed
-// against the workspace being viewed, so the same global role can be default
-// in one workspace and not another.
+// One workspace's roles plus every global role.
 func (q *Queries) ListAgentRoles(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentRolesRow, error) {
 	rows, err := q.db.Query(ctx, listAgentRoles, workspaceID)
 	if err != nil {
@@ -260,7 +185,6 @@ func (q *Queries) ListAgentRoles(ctx context.Context, workspaceID pgtype.UUID) (
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.IsDefault,
 			&i.AgentCount,
 		); err != nil {
 			return nil, err
@@ -271,21 +195,6 @@ func (q *Queries) ListAgentRoles(ctx context.Context, workspaceID pgtype.UUID) (
 		return nil, err
 	}
 	return items, nil
-}
-
-const setWorkspaceDefaultAgentRole = `-- name: SetWorkspaceDefaultAgentRole :exec
-UPDATE workspace SET default_agent_role_id = $1, updated_at = now()
-WHERE id = $2
-`
-
-type SetWorkspaceDefaultAgentRoleParams struct {
-	RoleID      pgtype.UUID `json:"role_id"`
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-}
-
-func (q *Queries) SetWorkspaceDefaultAgentRole(ctx context.Context, arg SetWorkspaceDefaultAgentRoleParams) error {
-	_, err := q.db.Exec(ctx, setWorkspaceDefaultAgentRole, arg.RoleID, arg.WorkspaceID)
-	return err
 }
 
 const updateAgentRole = `-- name: UpdateAgentRole :one

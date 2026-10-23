@@ -3570,14 +3570,6 @@ export class ApiClient {
     await this.fetch(`/api/agent-roles/${id}`, { method: "DELETE" });
   }
 
-  /** Set the workspace default role; `null` clears it. */
-  async setDefaultAgentRole(roleId: string | null): Promise<void> {
-    await this.fetch("/api/agent-roles/default", {
-      method: "PUT",
-      body: JSON.stringify({ role_id: roleId ?? "" }),
-    });
-  }
-
   async importSkill(data: { url: string }): Promise<Skill> {
     return this.fetch("/api/skills/import", {
       method: "POST",

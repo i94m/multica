@@ -6,7 +6,6 @@ import {
   agentRoleListOptions,
   useCreateAgentRole,
   useDeleteAgentRole,
-  useSetDefaultAgentRole,
   useUpdateAgentRole,
 } from "@multica/core/agents";
 import { useAuthStore } from "@multica/core/auth";
@@ -40,7 +39,7 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { CircleUser, Globe, Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { CircleUser, Globe, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "../../i18n";
 import {
@@ -78,7 +77,6 @@ export function RolesPage() {
   const createRole = useCreateAgentRole(wsId);
   const updateRole = useUpdateAgentRole(wsId);
   const deleteRole = useDeleteAgentRole(wsId);
-  const setDefault = useSetDefaultAgentRole(wsId);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgentRole | null>(null);
@@ -152,19 +150,6 @@ export function RolesPage() {
     }
   };
 
-  const toggleDefault = async (role: AgentRole) => {
-    try {
-      await setDefault.mutateAsync(role.is_default ? null : role.id);
-      toast.success(t(($) => $.roles.default_saved));
-    } catch (error) {
-      toast.error(
-        error instanceof Error && error.message
-          ? error.message
-          : t(($) => $.roles.save_failed),
-      );
-    }
-  };
-
   const saving = createRole.isPending || updateRole.isPending;
 
   return (
@@ -211,10 +196,8 @@ export function RolesPage() {
                   key={role.id}
                   role={role}
                   isAdmin={isAdmin}
-                  defaultBusy={setDefault.isPending}
                   onEdit={() => openEdit(role)}
                   onDelete={() => setPendingDelete(role)}
-                  onToggleDefault={() => toggleDefault(role)}
                 />
               ))}
             </ul>
@@ -378,17 +361,13 @@ export function RolesPage() {
 function RoleRow({
   role,
   isAdmin,
-  defaultBusy,
   onEdit,
   onDelete,
-  onToggleDefault,
 }: {
   role: AgentRole;
   isAdmin: boolean;
-  defaultBusy: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleDefault: () => void;
 }) {
   const { t } = useT("agents");
   return (
@@ -400,12 +379,6 @@ function RoleRow({
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-caption text-muted-foreground">
               <Globe className="size-3" />
               {t(($) => $.roles.global_badge)}
-            </span>
-          ) : null}
-          {role.is_default ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-caption font-medium text-primary">
-              <Star className="size-3" />
-              {t(($) => $.roles.default_badge)}
             </span>
           ) : null}
         </div>
@@ -426,18 +399,6 @@ function RoleRow({
         </span>
         {isAdmin ? (
           <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={onToggleDefault}
-              disabled={defaultBusy}
-            >
-              <Star className="size-3" />
-              {role.is_default
-                ? t(($) => $.roles.clear_default)
-                : t(($) => $.roles.set_default)}
-            </Button>
             <Button type="button" size="xs" variant="outline" onClick={onEdit}>
               <Pencil className="size-3" />
               {t(($) => $.roles.edit)}

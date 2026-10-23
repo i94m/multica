@@ -63,10 +63,3 @@ export function useDeleteAgentRole(wsId: string) {
   });
 }
 
-export function useSetDefaultAgentRole(wsId: string) {
-  const invalidate = useInvalidateAgentRoles(wsId);
-  return useMutation({
-    mutationFn: (roleId: string | null) => api.setDefaultAgentRole(roleId),
-    onSuccess: invalidate,
-  });
-}

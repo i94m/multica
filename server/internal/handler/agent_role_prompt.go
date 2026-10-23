@@ -14,11 +14,11 @@ import (
 // composeAgentRoleInstructions builds the effective Agent Identity prompt for
 // one run:
 //
-//	workspace default role + explicit agent role + agent-specific instructions
+//	explicit agent role + agent-specific instructions
 //
 // Role text is read on every claim, so editing a role reaches every linked
 // agent on its next run with no agent-row rewrite. A missing or unreadable role
-// degrades to the remaining layers instead of failing the task.
+// degrades to the agent-specific instructions instead of failing the task.
 func (h *Handler) composeAgentRoleInstructions(ctx context.Context, agent db.Agent) string {
 	// System agents (Mika, builder carriers) own a product-defined prompt and
 	// must never inherit workspace user configuration.
@@ -26,24 +26,8 @@ func (h *Handler) composeAgentRoleInstructions(ctx context.Context, agent db.Age
 		return agent.Instructions
 	}
 
-	parts := make([]string, 0, 3)
-	var defaultRoleID = agent.RoleID // zero value: no dedupe target
-
-	defaultRole, err := h.Queries.GetWorkspaceDefaultAgentRole(ctx, agent.WorkspaceID)
-	switch {
-	case err == nil:
-		defaultRoleID = defaultRole.ID
-		if text := strings.TrimSpace(defaultRole.Instructions); text != "" {
-			parts = append(parts, text)
-		}
-	case errors.Is(err, pgx.ErrNoRows):
-		// No workspace default configured.
-	default:
-		slog.Warn("agent role: load workspace default failed",
-			"workspace_id", util.UUIDToString(agent.WorkspaceID), "error", err)
-	}
-
-	if agent.RoleID.Valid && agent.RoleID != defaultRoleID {
+	parts := make([]string, 0, 2)
+	if agent.RoleID.Valid {
 		role, err := h.Queries.GetAgentRoleVisibleInWorkspace(ctx, db.GetAgentRoleVisibleInWorkspaceParams{
 			ID:          agent.RoleID,
 			WorkspaceID: agent.WorkspaceID,

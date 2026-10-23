@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/multica-ai/multica/server/internal/util"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -34,7 +33,6 @@ type AgentRoleResponse struct {
 	CreatedBy    *string `json:"created_by"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
-	IsDefault    bool    `json:"is_default"`
 	AgentCount   int64   `json:"agent_count"`
 }
 
@@ -56,10 +54,6 @@ type updateAgentRoleRequest struct {
 	Scope string `json:"scope"`
 }
 
-type setDefaultAgentRoleRequest struct {
-	RoleID string `json:"role_id"`
-}
-
 func agentRoleScope(workspaceID pgtype.UUID) string {
 	if workspaceID.Valid {
 		return "workspace"
@@ -67,7 +61,7 @@ func agentRoleScope(workspaceID pgtype.UUID) string {
 	return "global"
 }
 
-func agentRoleToResponse(role db.AgentRole, isDefault bool, agentCount int64) AgentRoleResponse {
+func agentRoleToResponse(role db.AgentRole, agentCount int64) AgentRoleResponse {
 	return AgentRoleResponse{
 		ID:           uuidToString(role.ID),
 		WorkspaceID:  uuidToString(role.WorkspaceID),
@@ -78,7 +72,6 @@ func agentRoleToResponse(role db.AgentRole, isDefault bool, agentCount int64) Ag
 		CreatedBy:    uuidToPtr(role.CreatedBy),
 		CreatedAt:    timestampToString(role.CreatedAt),
 		UpdatedAt:    timestampToString(role.UpdatedAt),
-		IsDefault:    isDefault,
 		AgentCount:   agentCount,
 	}
 }
@@ -94,7 +87,6 @@ func listAgentRoleToResponse(role db.ListAgentRolesRow) AgentRoleResponse {
 		CreatedBy:    uuidToPtr(role.CreatedBy),
 		CreatedAt:    timestampToString(role.CreatedAt),
 		UpdatedAt:    timestampToString(role.UpdatedAt),
-		IsDefault:    role.IsDefault,
 		AgentCount:   role.AgentCount,
 	}
 }
@@ -228,7 +220,7 @@ func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to create role")
 		return
 	}
-	writeJSON(w, http.StatusCreated, agentRoleToResponse(role, false, 0))
+	writeJSON(w, http.StatusCreated, agentRoleToResponse(role, 0))
 }
 
 // UpdateAgentRole edits the shared prompt. Agents keep their role_id, so the
@@ -287,13 +279,6 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "failed to detach role from other workspaces")
 			return
 		}
-		if err := qtx.ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspace(r.Context(), db.ClearWorkspaceDefaultAgentRoleReferencesOutsideWorkspaceParams{
-			RoleID:      role.ID,
-			WorkspaceID: wsUUID,
-		}); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to clear default role in other workspaces")
-			return
-		}
 	}
 
 	updated, err := qtx.UpdateAgentRole(r.Context(), db.UpdateAgentRoleParams{
@@ -315,12 +300,11 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to commit role update")
 		return
 	}
-	isDefault, count := h.roleDefaultAndCount(r.Context(), role.ID, workspaceID)
-	writeJSON(w, http.StatusOK, agentRoleToResponse(updated, isDefault, count))
+	writeJSON(w, http.StatusOK, agentRoleToResponse(updated, h.roleAgentCount(r.Context(), role.ID)))
 }
 
-// DeleteAgentRole detaches the role from every agent and clears it as a
-// workspace default before removing the row. Agents themselves are untouched.
+// DeleteAgentRole detaches the role from every agent before removing the row.
+// Agents themselves are untouched.
 func (h *Handler) DeleteAgentRole(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	if !h.roleAdmin(w, r, workspaceID) {
@@ -341,10 +325,6 @@ func (h *Handler) DeleteAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to detach role from agents")
 		return
 	}
-	if err := qtx.ClearWorkspaceDefaultAgentRoleReferences(r.Context(), role.ID); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to clear default role")
-		return
-	}
 	if err := qtx.DeleteAgentRole(r.Context(), role.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete role")
 		return
@@ -356,69 +336,10 @@ func (h *Handler) DeleteAgentRole(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// SetDefaultAgentRole sets or clears the role every user agent in the
-// workspace inherits automatically.
-func (h *Handler) SetDefaultAgentRole(w http.ResponseWriter, r *http.Request) {
-	workspaceID := h.resolveWorkspaceID(r)
-	if !h.roleAdmin(w, r, workspaceID) {
-		return
-	}
-	var req setDefaultAgentRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
-	if strings.TrimSpace(req.RoleID) == "" {
-		if err := h.Queries.ClearWorkspaceDefaultAgentRole(r.Context(), wsUUID); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to clear default role")
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	roleUUID, ok := parseUUIDOrBadRequest(w, req.RoleID, "role_id")
-	if !ok {
-		return
-	}
-	role, err := h.Queries.GetAgentRoleVisibleInWorkspace(r.Context(), db.GetAgentRoleVisibleInWorkspaceParams{
-		ID:          roleUUID,
-		WorkspaceID: wsUUID,
-	})
+func (h *Handler) roleAgentCount(ctx context.Context, roleID pgtype.UUID) int64 {
+	count, err := h.Queries.CountAgentsUsingRole(ctx, roleID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "role not found")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "failed to load role")
-		return
+		slog.Warn("role: count agents failed", "role_id", uuidToString(roleID), "error", err)
 	}
-	if !roleVisibleInWorkspace(role, workspaceID) {
-		writeError(w, http.StatusNotFound, "role not found")
-		return
-	}
-	if err := h.Queries.SetWorkspaceDefaultAgentRole(r.Context(), db.SetWorkspaceDefaultAgentRoleParams{
-		RoleID:      role.ID,
-		WorkspaceID: wsUUID,
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to set default role")
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *Handler) roleDefaultAndCount(ctx context.Context, roleID pgtype.UUID, workspaceID string) (bool, int64) {
-	wsUUID, err := util.ParseUUID(workspaceID)
-	if err != nil {
-		return false, 0
-	}
-	defaultID, err := h.Queries.GetWorkspaceDefaultAgentRoleID(ctx, wsUUID)
-	count, countErr := h.Queries.CountAgentsUsingRole(ctx, roleID)
-	if countErr != nil {
-		slog.Warn("role: count agents failed", "role_id", uuidToString(roleID), "error", countErr)
-	}
-	return err == nil && defaultID.Valid && defaultID == roleID, count
+	return count
 }
