@@ -217,7 +217,7 @@ const listAgentRoles = `-- name: ListAgentRoles :many
 
 SELECT
     r.id, r.workspace_id, r.name, r.description, r.instructions, r.created_by, r.created_at, r.updated_at,
-    (r.id = w.default_agent_role_id) AS is_default,
+    CASE WHEN r.id = w.default_agent_role_id THEN true ELSE false END AS is_default,
     (SELECT count(*) FROM agent a WHERE a.role_id = r.id) AS agent_count
 FROM agent_role r
 JOIN workspace w ON w.id = $1

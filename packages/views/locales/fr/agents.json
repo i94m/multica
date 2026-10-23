@@ -1010,6 +1010,7 @@
     "scope_hint": "Les rôles globaux sont disponibles dans tous les espaces de travail. Les rôles d’espace ne sont disponibles qu’ici.",
     "scope_change_warning": "Enregistrer retirera ce rôle des autres espaces de travail, y compris leur rôle par défaut et les liaisons d’agents.",
     "description": "Description",
+    "description_placeholder": "Résumé court affiché dans le sélecteur de rôle",
     "instructions": "Instructions du rôle",
     "instructions_hint": "Ces instructions sont ajoutées avant celles de l’agent à chaque exécution.",
     "default_badge": "Par défaut de l’espace",

@@ -1010,6 +1010,7 @@
     "scope_hint": "Global roles are available in every workspace. Workspace roles are only available here.",
     "scope_change_warning": "Saving will remove this role from other workspaces, including their default-role setting and agent bindings.",
     "description": "Description",
+    "description_placeholder": "Short summary shown in the role picker",
     "instructions": "Role instructions",
     "instructions_hint": "These instructions are added before the agent’s own instructions on every run.",
     "default_badge": "Workspace default",

@@ -6,7 +6,7 @@
 -- in one workspace and not another.
 SELECT
     r.*,
-    (r.id = w.default_agent_role_id) AS is_default,
+    CASE WHEN r.id = w.default_agent_role_id THEN true ELSE false END AS is_default,
     (SELECT count(*) FROM agent a WHERE a.role_id = r.id) AS agent_count
 FROM agent_role r
 JOIN workspace w ON w.id = @workspace_id

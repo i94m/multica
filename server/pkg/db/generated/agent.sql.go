@@ -5712,7 +5712,7 @@ func (q *Queries) ListChatFinalizeDeferredExpired(ctx context.Context, arg ListC
 }
 
 const listNonOwnerAgentsByRuntime = `-- name: ListNonOwnerAgentsByRuntime :many
-SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters FROM agent
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, role_id FROM agent
 WHERE runtime_id = $1
   AND owner_id IS DISTINCT FROM $2
 ORDER BY name ASC
@@ -5766,6 +5766,7 @@ func (q *Queries) ListNonOwnerAgentsByRuntime(ctx context.Context, arg ListNonOw
 			&i.DisabledRuntimeSkills,
 			&i.ServiceTier,
 			&i.ConversationStarters,
+			&i.RoleID,
 		); err != nil {
 			return nil, err
 		}
@@ -5778,7 +5779,7 @@ func (q *Queries) ListNonOwnerAgentsByRuntime(ctx context.Context, arg ListNonOw
 }
 
 const listNonOwnerAgentsByRuntimeForUpdate = `-- name: ListNonOwnerAgentsByRuntimeForUpdate :many
-SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters FROM agent
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier, conversation_starters, role_id FROM agent
 WHERE runtime_id = $1
   AND owner_id IS DISTINCT FROM $2
 ORDER BY id
@@ -5831,6 +5832,7 @@ func (q *Queries) ListNonOwnerAgentsByRuntimeForUpdate(ctx context.Context, arg 
 			&i.DisabledRuntimeSkills,
 			&i.ServiceTier,
 			&i.ConversationStarters,
+			&i.RoleID,
 		); err != nil {
 			return nil, err
 		}

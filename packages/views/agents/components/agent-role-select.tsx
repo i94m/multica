@@ -34,16 +34,16 @@ export function AgentRoleSelect({
   const { t } = useT("agents");
   const { data: roles = [], isLoading } = useQuery(agentRoleListOptions(wsId));
   const defaultRole = roles.find((role) => role.is_default);
-  // Global roles are workspace-wide defaults, not per-agent choices. They stay
-  // visible on the Roles page and as the inherited default, but the agent
-  // picker only offers roles owned by this workspace.
-  const selectableRoles = roles.filter((role) => role.scope !== "global");
-  const selectedValue = selectableRoles.some((role) => role.id === value)
+  // Every visible role is selectable, including global roles: choosing one for
+  // an agent is a read-only use of the shared prompt. Creating or editing a
+  // role definition stays restricted to workspace owner/admin (enforced by the
+  // Roles page and the API).
+  const selectedValue = roles.some((role) => role.id === value)
     ? (value as string)
     : NO_ROLE;
   const items = [
     { value: NO_ROLE, label: t(($) => $.role_select.none) },
-    ...selectableRoles.map((role) => ({
+    ...roles.map((role) => ({
       value: role.id,
       label: role.is_default
         ? `${role.name}${t(($) => $.role_select.default_suffix)}`

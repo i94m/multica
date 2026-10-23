@@ -988,6 +988,7 @@
     "scope_hint": "全局角色在所有工作区可用；工作区角色仅当前工作区可用。",
     "scope_change_warning": "保存后其他工作区将不再能看到此角色，相关默认角色设置和智能体绑定也会被清除。",
     "description": "描述",
+    "description_placeholder": "在角色选择器中显示的简短说明",
     "instructions": "角色提示词",
     "instructions_hint": "每次运行时会先加入这段提示词，再加入智能体自己的指令。",
     "default_badge": "工作区默认",

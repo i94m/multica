@@ -40,7 +40,6 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { cn } from "@multica/ui/lib/utils";
 import { CircleUser, Globe, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "../../i18n";
@@ -206,22 +205,28 @@ export function RolesPage() {
               }
             />
           ) : (
-            roles.map((role) => (
-              <RoleCard
-                key={role.id}
-                role={role}
-                isAdmin={isAdmin}
-                defaultBusy={setDefault.isPending}
-                onEdit={() => openEdit(role)}
-                onDelete={() => setPendingDelete(role)}
-                onToggleDefault={() => toggleDefault(role)}
-              />
-            ))
+            <ul className="divide-y overflow-hidden rounded-lg border bg-card">
+              {roles.map((role) => (
+                <RoleRow
+                  key={role.id}
+                  role={role}
+                  isAdmin={isAdmin}
+                  defaultBusy={setDefault.isPending}
+                  onEdit={() => openEdit(role)}
+                  onDelete={() => setPendingDelete(role)}
+                  onToggleDefault={() => toggleDefault(role)}
+                />
+              ))}
+            </ul>
           )}
         </div>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        disablePointerDismissal
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
@@ -293,6 +298,7 @@ export function RolesPage() {
                 value={draft.description}
                 maxLength={255}
                 rows={2}
+                placeholder={t(($) => $.roles.description_placeholder)}
                 onChange={(event) =>
                   setDraft((prev) => ({
                     ...prev,
@@ -312,6 +318,7 @@ export function RolesPage() {
                 value={draft.instructions}
                 rows={14}
                 className="min-h-72 resize-y font-mono text-label leading-6"
+                placeholder={t(($) => $.tab_body.instructions.placeholder)}
                 onChange={(event) =>
                   setDraft((prev) => ({
                     ...prev,
@@ -368,7 +375,7 @@ export function RolesPage() {
   );
 }
 
-function RoleCard({
+function RoleRow({
   role,
   isAdmin,
   defaultBusy,
@@ -385,9 +392,9 @@ function RoleCard({
 }) {
   const { t } = useT("agents");
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-start gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+    <li className="flex flex-wrap items-start gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
           <h2 className="truncate text-body font-medium">{role.name}</h2>
           {role.scope === "global" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-caption text-muted-foreground">
@@ -402,8 +409,23 @@ function RoleCard({
             </span>
           ) : null}
         </div>
+        {role.description ? (
+          <p className="mt-0.5 truncate text-caption text-muted-foreground">
+            {role.description}
+          </p>
+        ) : null}
+        {role.instructions ? (
+          <p className="mt-1 line-clamp-1 text-caption leading-5 text-muted-foreground/80">
+            {role.instructions}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <span className="text-caption text-muted-foreground">
+          {t(($) => $.roles.agent_count, { count: role.agent_count })}
+        </span>
         {isAdmin ? (
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex items-center gap-1">
             <Button
               type="button"
               size="xs"
@@ -433,23 +455,6 @@ function RoleCard({
           </div>
         ) : null}
       </div>
-      {role.description ? (
-        <p className="mt-1 text-caption text-muted-foreground">
-          {role.description}
-        </p>
-      ) : null}
-      <p
-        className={cn(
-          "mt-3 whitespace-pre-wrap text-caption leading-5 text-muted-foreground",
-          "line-clamp-3",
-        )}
-      >
-        {role.instructions}
-      </p>
-      <p className="mt-3 text-caption text-muted-foreground">
-        {t(($) => $.roles.agent_count, { count: role.agent_count })}
-        {role.is_default ? ` · ${t(($) => $.roles.default_hint)}` : ""}
-      </p>
-    </div>
+    </li>
   );
 }
