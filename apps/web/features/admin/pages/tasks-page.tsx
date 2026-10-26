@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale } from "@multica/views/i18n";
-import { Input } from "@multica/ui/components/ui/input";
 import {
   Table,
   TableBody,
@@ -12,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@multica/ui/components/ui/table";
+import { AdminDatePicker } from "../components/date-picker";
 import { adminTasksOptions, adminWorkspacesOptions } from "../queries";
 import { useAdminCopy } from "../i18n";
 import { adminPaths } from "../paths";
@@ -139,30 +139,32 @@ export default function TasksPage() {
           label={copy.common.workspace}
           className="w-56"
         />
-        <label className="flex items-center gap-2 text-caption text-muted-foreground">
-          {copy.common.from}
-          <Input
-            type="date"
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+          <span>{copy.common.from}</span>
+          <AdminDatePicker
             value={from}
-            onChange={(event) => {
-              setFrom(event.target.value);
+            onChange={(value) => {
+              setFrom(value);
               resetPage();
             }}
-            className="w-40"
+            label={copy.common.from}
+            placeholder={copy.common.anyDate}
+            emptyLabel={copy.common.anyDate}
           />
-        </label>
-        <label className="flex items-center gap-2 text-caption text-muted-foreground">
-          {copy.common.to}
-          <Input
-            type="date"
+        </div>
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+          <span>{copy.common.to}</span>
+          <AdminDatePicker
             value={to}
-            onChange={(event) => {
-              setTo(event.target.value);
+            onChange={(value) => {
+              setTo(value);
               resetPage();
             }}
-            className="w-40"
+            label={copy.common.to}
+            placeholder={copy.common.anyDate}
+            emptyLabel={copy.common.anyDate}
           />
-        </label>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-surface-border bg-surface">

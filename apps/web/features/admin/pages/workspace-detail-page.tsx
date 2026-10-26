@@ -26,6 +26,8 @@ import {
   formatNumber,
 } from "../components/shared";
 
+const ROLE_RANK: Record<string, number> = { owner: 0, admin: 1, member: 2 };
+
 export default function WorkspaceDetailPage() {
   const copy = useAdminCopy();
   const locale = useLocale();
@@ -68,8 +70,8 @@ export default function WorkspaceDetailPage() {
         />
       </SectionCard>
 
-      <SectionCard title={copy.common.owner}>
-        {data.owners.length === 0 ? (
+      <SectionCard title={`${copy.common.members} (${data.members.length})`}>
+        {data.members.length === 0 ? (
           <p className="text-body text-muted-foreground">{copy.common.empty}</p>
         ) : (
           <Table>
@@ -77,21 +79,31 @@ export default function WorkspaceDetailPage() {
               <TableRow>
                 <TableHead>{copy.common.name}</TableHead>
                 <TableHead>{copy.common.email}</TableHead>
+                <TableHead>{copy.common.role}</TableHead>
                 <TableHead>{copy.common.joined}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.owners.map((owner) => (
-                <TableRow key={owner.user_id}>
-                  <TableCell>
-                    <EntityLink href={adminPaths.user(owner.user_id)}>{owner.name}</EntityLink>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{owner.email}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDateTime(owner.created_at, locale)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {[...data.members]
+                .sort(
+                  (a, b) =>
+                    (ROLE_RANK[a.role] ?? 9) - (ROLE_RANK[b.role] ?? 9) ||
+                    a.created_at.localeCompare(b.created_at),
+                )
+                .map((member) => (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <EntityLink href={adminPaths.user(member.user_id)}>{member.name}</EntityLink>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{member.email}</TableCell>
+                    <TableCell>
+                      <code className="text-caption">{member.role}</code>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDateTime(member.created_at, locale)}
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         )}

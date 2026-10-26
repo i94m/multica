@@ -64,15 +64,18 @@ export const adminWorkspaceSchema = z.object({
   runtime_count: z.number().default(0),
 });
 
-export const adminWorkspaceOwnerSchema = z.object({
+export const adminWorkspaceMemberSchema = z.object({
+  id: z.string(),
   user_id: z.string(),
   name: z.string().default(""),
   email: z.string().default(""),
+  avatar_url: nullableString,
+  role: z.string().default(""),
   created_at: z.string().default(""),
 });
 
 export const adminWorkspaceDetailSchema = adminWorkspaceSchema.extend({
-  owners: z.array(adminWorkspaceOwnerSchema).default([]),
+  members: z.array(adminWorkspaceMemberSchema).default([]),
 });
 
 export const adminWorkspacePageSchema = pageSchema(adminWorkspaceSchema);
@@ -267,7 +270,7 @@ export type AdminMembership = z.infer<typeof adminMembershipSchema>;
 export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 export type AdminUserPage = z.infer<typeof adminUserPageSchema>;
 export type AdminWorkspace = z.infer<typeof adminWorkspaceSchema>;
-export type AdminWorkspaceOwner = z.infer<typeof adminWorkspaceOwnerSchema>;
+export type AdminWorkspaceMember = z.infer<typeof adminWorkspaceMemberSchema>;
 export type AdminWorkspaceDetail = z.infer<typeof adminWorkspaceDetailSchema>;
 export type AdminWorkspacePage = z.infer<typeof adminWorkspacePageSchema>;
 export type AdminTask = z.infer<typeof adminTaskSchema>;
