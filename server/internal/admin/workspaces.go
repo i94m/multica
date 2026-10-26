@@ -19,16 +19,19 @@ type adminWorkspaceResponse struct {
 	RuntimeCount int64   `json:"runtime_count"`
 }
 
-type adminWorkspaceOwnerResponse struct {
-	UserID    string `json:"user_id"`
-	Name      string `json:"name"`
-	Email     string `json:"email"`
-	CreatedAt string `json:"created_at"`
+type adminWorkspaceMemberResponse struct {
+	ID        string  `json:"id"`
+	UserID    string  `json:"user_id"`
+	Name      string  `json:"name"`
+	Email     string  `json:"email"`
+	AvatarURL *string `json:"avatar_url"`
+	Role      string  `json:"role"`
+	CreatedAt string  `json:"created_at"`
 }
 
 type adminWorkspaceDetailResponse struct {
 	adminWorkspaceResponse
-	Owners []adminWorkspaceOwnerResponse `json:"owners"`
+	Members []adminWorkspaceMemberResponse `json:"members"`
 }
 
 func workspaceResponse(row db.GetAdminWorkspaceRow) adminWorkspaceResponse {
@@ -105,21 +108,24 @@ func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeDBError(w, err, "workspace not found", "failed to load workspace")
 		return
 	}
-	owners, err := h.queries.ListAdminWorkspaceOwners(r.Context(), id)
+	members, err := h.queries.ListMembersWithUser(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to load workspace owners")
+		writeError(w, http.StatusInternalServerError, "failed to load workspace members")
 		return
 	}
 	resp := adminWorkspaceDetailResponse{
 		adminWorkspaceResponse: workspaceResponse(row),
-		Owners:                 make([]adminWorkspaceOwnerResponse, len(owners)),
+		Members:                make([]adminWorkspaceMemberResponse, len(members)),
 	}
-	for i, owner := range owners {
-		resp.Owners[i] = adminWorkspaceOwnerResponse{
-			UserID:    uuidString(owner.UserID),
-			Name:      owner.Name,
-			Email:     owner.Email,
-			CreatedAt: timestampString(owner.CreatedAt),
+	for i, member := range members {
+		resp.Members[i] = adminWorkspaceMemberResponse{
+			ID:        uuidString(member.ID),
+			UserID:    uuidString(member.UserID),
+			Name:      member.UserName,
+			Email:     member.UserEmail,
+			AvatarURL: textPtr(member.UserAvatarUrl),
+			Role:      member.Role,
+			CreatedAt: timestampString(member.CreatedAt),
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

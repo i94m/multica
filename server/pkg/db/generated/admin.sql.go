@@ -1466,50 +1466,6 @@ func (q *Queries) ListAdminUsers(ctx context.Context, arg ListAdminUsersParams) 
 	return items, nil
 }
 
-const listAdminWorkspaceOwners = `-- name: ListAdminWorkspaceOwners :many
-SELECT
-    m.user_id,
-    u.name,
-    u.email,
-    m.created_at
-FROM member m
-JOIN "user" u ON u.id = m.user_id
-WHERE m.workspace_id = $1 AND m.role = 'owner'
-ORDER BY m.created_at ASC
-`
-
-type ListAdminWorkspaceOwnersRow struct {
-	UserID    pgtype.UUID        `json:"user_id"`
-	Name      string             `json:"name"`
-	Email     string             `json:"email"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
-func (q *Queries) ListAdminWorkspaceOwners(ctx context.Context, workspaceID pgtype.UUID) ([]ListAdminWorkspaceOwnersRow, error) {
-	rows, err := q.db.Query(ctx, listAdminWorkspaceOwners, workspaceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListAdminWorkspaceOwnersRow{}
-	for rows.Next() {
-		var i ListAdminWorkspaceOwnersRow
-		if err := rows.Scan(
-			&i.UserID,
-			&i.Name,
-			&i.Email,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAdminWorkspaces = `-- name: ListAdminWorkspaces :many
 WITH params AS (
     SELECT

@@ -158,16 +158,6 @@ SELECT
 FROM workspace w
 WHERE w.id = $1;
 
--- name: ListAdminWorkspaceOwners :many
-SELECT
-    m.user_id,
-    u.name,
-    u.email,
-    m.created_at
-FROM member m
-JOIN "user" u ON u.id = m.user_id
-WHERE m.workspace_id = $1 AND m.role = 'owner'
-ORDER BY m.created_at ASC;
 
 -- name: ListAdminTasks :many
 WITH params AS (
