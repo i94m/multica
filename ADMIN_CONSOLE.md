@@ -55,6 +55,18 @@ returns 404 and the console is invisible.
 All endpoints are GET-only. Mutating platform-admin actions (delete workspace,
 cancel task, disable user) are deliberately out of scope for this version.
 
+List endpoints use the traditional page contract:
+
+```
+?page=1&page_size=25&sort=created_at&order=desc&q=...
+```
+
+`page_size` is capped at 100. `sort` and `order` are validated per endpoint
+against a whitelist; unknown values fall back to the endpoint default. Search
+(`q`) and the entity filters (workspace, status, provider, kind, permission,
+date range) are applied on the server, so counts and pagination reflect the
+filtered result set.
+
 ## Security notes
 
 - `middleware.Auth` + `handler.RequireHumanActor` run before the admin gate, so
