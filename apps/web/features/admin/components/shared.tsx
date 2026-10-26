@@ -295,14 +295,24 @@ export function FilterSelect({
   label: string;
   className?: string;
 }) {
+  const allValue = "__all__";
+  const normalized = items.map((item) => ({
+    ...item,
+    value: item.value || allValue,
+  }));
+
   return (
-    <Select items={items} value={value || null} onValueChange={(next) => onChange(next ?? "")}>
+    <Select
+      items={normalized}
+      value={value || allValue}
+      onValueChange={(next) => onChange(!next || next === allValue ? "" : next)}
+    >
       <SelectTrigger className={className ?? "w-44"} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent alignItemWithTrigger={false}>
-        {items.map((item) => (
-          <SelectItem key={item.value || "all"} value={item.value}>
+        {normalized.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
             {item.label}
           </SelectItem>
         ))}

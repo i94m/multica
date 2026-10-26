@@ -202,14 +202,7 @@ export default function TasksPage() {
                   order={list.order}
                   onSort={list.onSort}
                 />
-                <SortableHead
-                  label={copy.common.duration}
-                  column="started_at"
-                  sort={list.sort}
-                  order={list.order}
-                  onSort={list.onSort}
-                  className="text-right"
-                />
+                <TableHead className="text-right">{copy.common.duration}</TableHead>
                 <TableHead className="text-right">{copy.common.cost}</TableHead>
               </TableRow>
             </TableHeader>
