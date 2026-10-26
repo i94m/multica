@@ -25,9 +25,10 @@ DELETE FROM platform_admin WHERE user_id = $1;
 WITH params AS (
     SELECT
         sqlc.arg('query')::text AS query,
-        sqlc.narg('cursor_created_at')::timestamptz AS cursor_created_at,
-        sqlc.narg('cursor_id')::uuid AS cursor_id,
-        sqlc.arg('page_limit')::int AS page_limit
+        sqlc.arg('sort_key')::text AS sort_key,
+        sqlc.arg('sort_dir')::text AS sort_dir,
+        sqlc.arg('page_limit')::int AS page_limit,
+        sqlc.arg('page_offset')::int AS page_offset
 )
 SELECT
     u.id,
@@ -44,12 +45,27 @@ WHERE (
     OR u.name ILIKE '%' || p.query || '%'
     OR u.email ILIKE '%' || p.query || '%'
 )
-AND (
-    p.cursor_created_at IS NULL
-    OR (u.created_at, u.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY u.created_at DESC, u.id DESC
-LIMIT (SELECT page_limit FROM params);
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN u.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN u.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'email' AND p.sort_dir = 'asc' THEN u.email END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'email' AND p.sort_dir = 'desc' THEN u.email END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspaces' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM member m WHERE m.user_id = u.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspaces' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM member m WHERE m.user_id = u.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN u.created_at END ASC NULLS LAST,
+    u.created_at DESC,
+    u.id DESC
+LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params);
+
+-- name: CountAdminUsers :one
+SELECT count(*)::bigint
+FROM "user" u
+WHERE (
+    sqlc.arg('query')::text = ''
+    OR u.name ILIKE '%' || sqlc.arg('query') || '%'
+    OR u.email ILIKE '%' || sqlc.arg('query') || '%'
+);
 
 -- name: GetAdminUser :one
 SELECT
@@ -80,9 +96,10 @@ ORDER BY m.created_at ASC;
 WITH params AS (
     SELECT
         sqlc.arg('query')::text AS query,
-        sqlc.narg('cursor_created_at')::timestamptz AS cursor_created_at,
-        sqlc.narg('cursor_id')::uuid AS cursor_id,
-        sqlc.arg('page_limit')::int AS page_limit
+        sqlc.arg('sort_key')::text AS sort_key,
+        sqlc.arg('sort_dir')::text AS sort_dir,
+        sqlc.arg('page_limit')::int AS page_limit,
+        sqlc.arg('page_offset')::int AS page_offset
 )
 SELECT
     w.id,
@@ -101,12 +118,31 @@ WHERE (
     OR w.name ILIKE '%' || p.query || '%'
     OR w.slug ILIKE '%' || p.query || '%'
 )
-AND (
-    p.cursor_created_at IS NULL
-    OR (w.created_at, w.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY w.created_at DESC, w.id DESC
-LIMIT (SELECT page_limit FROM params);
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN w.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN w.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'members' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM member m WHERE m.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'members' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM member m WHERE m.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'issues' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'issues' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'agents' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'agents' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'runtimes' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'runtimes' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN w.created_at END ASC NULLS LAST,
+    w.created_at DESC,
+    w.id DESC
+LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params);
+
+-- name: CountAdminWorkspaces :one
+SELECT count(*)::bigint
+FROM workspace w
+WHERE (
+    sqlc.arg('query')::text = ''
+    OR w.name ILIKE '%' || sqlc.arg('query') || '%'
+    OR w.slug ILIKE '%' || sqlc.arg('query') || '%'
+);
 
 -- name: GetAdminWorkspace :one
 SELECT
@@ -136,15 +172,17 @@ ORDER BY m.created_at ASC;
 -- name: ListAdminTasks :many
 WITH params AS (
     SELECT
+        sqlc.arg('query')::text AS query,
         sqlc.arg('status')::text AS status,
         sqlc.narg('workspace_id')::uuid AS workspace_id,
         sqlc.narg('agent_id')::uuid AS agent_id,
         sqlc.narg('runtime_id')::uuid AS runtime_id,
         sqlc.narg('from_at')::timestamptz AS from_at,
         sqlc.narg('to_at')::timestamptz AS to_at,
-        sqlc.narg('cursor_created_at')::timestamptz AS cursor_created_at,
-        sqlc.narg('cursor_id')::uuid AS cursor_id,
-        sqlc.arg('page_limit')::int AS page_limit
+        sqlc.arg('sort_key')::text AS sort_key,
+        sqlc.arg('sort_dir')::text AS sort_dir,
+        sqlc.arg('page_limit')::int AS page_limit,
+        sqlc.arg('page_offset')::int AS page_offset
 )
 SELECT
     t.id,
@@ -176,21 +214,55 @@ JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN issue i ON i.id = t.issue_id
 LEFT JOIN agent_runtime r ON r.id = t.runtime_id
 CROSS JOIN params p
-WHERE (
-    p.status = ''
-    OR t.status = p.status
-)
+WHERE (p.status = '' OR t.status = p.status)
 AND (p.workspace_id IS NULL OR a.workspace_id = p.workspace_id)
 AND (p.agent_id IS NULL OR t.agent_id = p.agent_id)
 AND (p.runtime_id IS NULL OR t.runtime_id = p.runtime_id)
 AND (p.from_at IS NULL OR t.created_at >= p.from_at)
 AND (p.to_at IS NULL OR t.created_at < p.to_at)
 AND (
-    p.cursor_created_at IS NULL
-    OR (t.created_at, t.id) < (p.cursor_created_at, p.cursor_id)
+    p.query = ''
+    OR a.name ILIKE '%' || p.query || '%'
+    OR w.name ILIKE '%' || p.query || '%'
+    OR coalesce(i.title, '') ILIKE '%' || p.query || '%'
+    OR coalesce(t.trigger_summary, '') ILIKE '%' || p.query || '%'
 )
-ORDER BY t.created_at DESC, t.id DESC
-LIMIT (SELECT page_limit FROM params);
+ORDER BY
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'asc' THEN t.status END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'desc' THEN t.status END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'agent' AND p.sort_dir = 'asc' THEN a.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'agent' AND p.sort_dir = 'desc' THEN a.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspace' AND p.sort_dir = 'asc' THEN w.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspace' AND p.sort_dir = 'desc' THEN w.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'started_at' AND p.sort_dir = 'asc' THEN t.started_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'started_at' AND p.sort_dir = 'desc' THEN t.started_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'completed_at' AND p.sort_dir = 'asc' THEN t.completed_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'completed_at' AND p.sort_dir = 'desc' THEN t.completed_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN t.created_at END ASC NULLS LAST,
+    t.created_at DESC,
+    t.id DESC
+LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params);
+
+-- name: CountAdminTasks :one
+SELECT count(*)::bigint
+FROM agent_task_queue t
+JOIN agent a ON a.id = t.agent_id
+JOIN workspace w ON w.id = a.workspace_id
+LEFT JOIN issue i ON i.id = t.issue_id
+WHERE (sqlc.arg('status')::text = '' OR t.status = sqlc.arg('status'))
+AND (sqlc.narg('workspace_id')::uuid IS NULL OR a.workspace_id = sqlc.narg('workspace_id'))
+AND (sqlc.narg('agent_id')::uuid IS NULL OR t.agent_id = sqlc.narg('agent_id'))
+AND (sqlc.narg('runtime_id')::uuid IS NULL OR t.runtime_id = sqlc.narg('runtime_id'))
+AND (sqlc.narg('from_at')::timestamptz IS NULL OR t.created_at >= sqlc.narg('from_at'))
+AND (sqlc.narg('to_at')::timestamptz IS NULL OR t.created_at < sqlc.narg('to_at'))
+AND (
+    sqlc.arg('query')::text = ''
+    OR a.name ILIKE '%' || sqlc.arg('query') || '%'
+    OR w.name ILIKE '%' || sqlc.arg('query') || '%'
+    OR coalesce(i.title, '') ILIKE '%' || sqlc.arg('query') || '%'
+    OR coalesce(t.trigger_summary, '') ILIKE '%' || sqlc.arg('query') || '%'
+);
 
 -- name: GetAdminTask :one
 SELECT
@@ -232,9 +304,12 @@ WITH params AS (
         sqlc.arg('query')::text AS query,
         sqlc.narg('workspace_id')::uuid AS workspace_id,
         sqlc.arg('include_archived')::boolean AS include_archived,
-        sqlc.narg('cursor_created_at')::timestamptz AS cursor_created_at,
-        sqlc.narg('cursor_id')::uuid AS cursor_id,
-        sqlc.arg('page_limit')::int AS page_limit
+        sqlc.arg('kind')::text AS kind,
+        sqlc.arg('permission_mode')::text AS permission_mode,
+        sqlc.arg('sort_key')::text AS sort_key,
+        sqlc.arg('sort_dir')::text AS sort_dir,
+        sqlc.arg('page_limit')::int AS page_limit,
+        sqlc.arg('page_offset')::int AS page_offset
 )
 SELECT
     a.id,
@@ -261,15 +336,35 @@ CROSS JOIN params p
 WHERE (
     p.query = ''
     OR a.name ILIKE '%' || p.query || '%'
+    OR coalesce(u.name, '') ILIKE '%' || p.query || '%'
 )
 AND (p.workspace_id IS NULL OR a.workspace_id = p.workspace_id)
 AND (p.include_archived OR a.archived_at IS NULL)
-AND (
-    p.cursor_created_at IS NULL
-    OR (a.created_at, a.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY a.created_at DESC, a.id DESC
-LIMIT (SELECT page_limit FROM params);
+AND (p.kind = '' OR a.kind = p.kind)
+AND (p.permission_mode = '' OR a.permission_mode = p.permission_mode)
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN a.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN a.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'runs' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days') END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'runs' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days') END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'archived_at' AND p.sort_dir = 'asc' THEN a.archived_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'archived_at' AND p.sort_dir = 'desc' THEN a.archived_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN a.created_at END ASC NULLS LAST,
+    a.created_at DESC,
+    a.id DESC
+LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params);
+
+-- name: CountAdminAgents :one
+SELECT count(*)::bigint
+FROM agent a
+JOIN workspace w ON w.id = a.workspace_id
+LEFT JOIN "user" u ON u.id = a.owner_id
+WHERE (sqlc.arg('query')::text = '' OR a.name ILIKE '%' || sqlc.arg('query') || '%' OR coalesce(u.name, '') ILIKE '%' || sqlc.arg('query') || '%')
+AND (sqlc.narg('workspace_id')::uuid IS NULL OR a.workspace_id = sqlc.narg('workspace_id'))
+AND (sqlc.arg('include_archived')::boolean OR a.archived_at IS NULL)
+AND (sqlc.arg('kind')::text = '' OR a.kind = sqlc.arg('kind'))
+AND (sqlc.arg('permission_mode')::text = '' OR a.permission_mode = sqlc.arg('permission_mode'));
 
 -- name: GetAdminAgent :one
 SELECT
@@ -304,9 +399,11 @@ WITH params AS (
         sqlc.arg('query')::text AS query,
         sqlc.narg('workspace_id')::uuid AS workspace_id,
         sqlc.arg('status')::text AS status,
-        sqlc.narg('cursor_created_at')::timestamptz AS cursor_created_at,
-        sqlc.narg('cursor_id')::uuid AS cursor_id,
-        sqlc.arg('page_limit')::int AS page_limit
+        sqlc.arg('provider')::text AS provider,
+        sqlc.arg('sort_key')::text AS sort_key,
+        sqlc.arg('sort_dir')::text AS sort_dir,
+        sqlc.arg('page_limit')::int AS page_limit,
+        sqlc.arg('page_offset')::int AS page_offset
 )
 SELECT
     r.id,
@@ -334,12 +431,29 @@ WHERE (
 )
 AND (p.workspace_id IS NULL OR r.workspace_id = p.workspace_id)
 AND (p.status = '' OR r.status = p.status)
-AND (
-    p.cursor_created_at IS NULL
-    OR (r.created_at, r.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY r.created_at DESC, r.id DESC
-LIMIT (SELECT page_limit FROM params);
+AND (p.provider = '' OR r.provider = p.provider)
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN coalesce(r.custom_name, r.name) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN coalesce(r.custom_name, r.name) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'asc' THEN r.status END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'desc' THEN r.status END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'provider' AND p.sort_dir = 'asc' THEN r.provider END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'provider' AND p.sort_dir = 'desc' THEN r.provider END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'last_seen_at' AND p.sort_dir = 'asc' THEN r.last_seen_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'last_seen_at' AND p.sort_dir = 'desc' THEN r.last_seen_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN r.created_at END ASC NULLS LAST,
+    r.created_at DESC,
+    r.id DESC
+LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params);
+
+-- name: CountAdminRuntimes :one
+SELECT count(*)::bigint
+FROM agent_runtime r
+WHERE (sqlc.arg('query')::text = '' OR coalesce(r.custom_name, r.name) ILIKE '%' || sqlc.arg('query') || '%' OR r.provider ILIKE '%' || sqlc.arg('query') || '%')
+AND (sqlc.narg('workspace_id')::uuid IS NULL OR r.workspace_id = sqlc.narg('workspace_id'))
+AND (sqlc.arg('status')::text = '' OR r.status = sqlc.arg('status'))
+AND (sqlc.arg('provider')::text = '' OR r.provider = sqlc.arg('provider'));
 
 -- name: GetAdminRuntime :one
 SELECT

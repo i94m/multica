@@ -1,55 +1,50 @@
 package admin
 
 import (
+	"net/http/httptest"
 	"testing"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/multica-ai/multica/server/internal/util"
 )
 
-func TestCursorRoundTrip(t *testing.T) {
-	id, err := util.ParseUUID("8a3f0d5e-3b7a-4e2c-9d1f-2a6b7c8d9e0f")
-	if err != nil {
-		t.Fatal(err)
+func TestParsePageRequestDefaults(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	got := parsePageRequest(req, map[string]bool{"created_at": true, "name": true}, "created_at")
+	if got.Page != 1 || got.PageSize != defaultPageSize || got.Offset != 0 {
+		t.Fatalf("unexpected defaults: %+v", got)
 	}
-	createdAt := pgtype.Timestamptz{Time: time.Date(2026, 10, 26, 9, 30, 0, 0, time.UTC), Valid: true}
-
-	encoded := encodeCursor(createdAt, id)
-	if encoded == nil {
-		t.Fatal("expected a cursor")
-	}
-	gotTime, gotID, ok := decodeCursor(*encoded)
-	if !ok {
-		t.Fatal("cursor did not decode")
-	}
-	if !gotTime.Time.Equal(createdAt.Time) {
-		t.Fatalf("time = %v, want %v", gotTime.Time, createdAt.Time)
-	}
-	if util.UUIDToString(gotID) != util.UUIDToString(id) {
-		t.Fatalf("id = %v, want %v", gotID, id)
+	if got.SortKey != "created_at" || got.SortDir != "desc" {
+		t.Fatalf("unexpected default sort: %+v", got)
 	}
 }
 
-func TestDecodeCursorRejectsGarbage(t *testing.T) {
-	if _, _, ok := decodeCursor("not-a-cursor"); ok {
-		t.Fatal("expected invalid cursor to be rejected")
+func TestParsePageRequestValidatesSortAndCapsPageSize(t *testing.T) {
+	req := httptest.NewRequest("GET", "/api/admin/users?page=3&page_size=999&sort=name&order=asc", nil)
+	got := parsePageRequest(req, map[string]bool{"created_at": true, "name": true}, "created_at")
+	if got.Page != 3 || got.PageSize != maxPageSize || got.Offset != int32(2*maxPageSize) {
+		t.Fatalf("unexpected page: %+v", got)
+	}
+	if got.SortKey != "name" || got.SortDir != "asc" {
+		t.Fatalf("unexpected sort: %+v", got)
+	}
+
+	req = httptest.NewRequest("GET", "/api/admin/users?sort=password&order=sideways", nil)
+	got = parsePageRequest(req, map[string]bool{"created_at": true, "name": true}, "created_at")
+	if got.SortKey != "created_at" || got.SortDir != "desc" {
+		t.Fatalf("unknown sort should fall back: %+v", got)
 	}
 }
 
-func TestPageFromTrimsExtraRow(t *testing.T) {
-	type row struct {
-		created string
-		id      string
-	}
-	rows := []row{
-		{"2026-10-26T09:30:00Z", "8a3f0d5e-3b7a-4e2c-9d1f-2a6b7c8d9e0f"},
-		{"2026-10-25T09:30:00Z", "8a3f0d5e-3b7a-4e2c-9d1f-2a6b7c8d9e01"},
-	}
-	page := pageFrom(rows, 1, func(item row) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.created, item.id)
-	})
-	if len(page.Items) != 1 || !page.HasMore || page.NextCursor == nil {
+func TestNewPageResponse(t *testing.T) {
+	req := pageRequest{Page: 2, PageSize: 25}
+	page := newPageResponse([]string{"a"}, 51, req)
+	if page.Total != 51 || page.TotalPages != 3 || !page.HasMore {
 		t.Fatalf("unexpected page: %+v", page)
+	}
+	if page.Items == nil {
+		t.Fatal("items should never be nil")
+	}
+
+	empty := newPageResponse[string](nil, 0, req)
+	if empty.Items == nil || empty.TotalPages != 0 || empty.HasMore {
+		t.Fatalf("unexpected empty page: %+v", empty)
 	}
 }

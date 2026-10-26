@@ -200,6 +200,147 @@ func (q *Queries) AdminUsageTotals(ctx context.Context, arg AdminUsageTotalsPara
 	return i, err
 }
 
+const countAdminAgents = `-- name: CountAdminAgents :one
+SELECT count(*)::bigint
+FROM agent a
+JOIN workspace w ON w.id = a.workspace_id
+LEFT JOIN "user" u ON u.id = a.owner_id
+WHERE ($1::text = '' OR a.name ILIKE '%' || $1 || '%' OR coalesce(u.name, '') ILIKE '%' || $1 || '%')
+AND ($2::uuid IS NULL OR a.workspace_id = $2)
+AND ($3::boolean OR a.archived_at IS NULL)
+AND ($4::text = '' OR a.kind = $4)
+AND ($5::text = '' OR a.permission_mode = $5)
+`
+
+type CountAdminAgentsParams struct {
+	Query           string      `json:"query"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	IncludeArchived bool        `json:"include_archived"`
+	Kind            string      `json:"kind"`
+	PermissionMode  string      `json:"permission_mode"`
+}
+
+func (q *Queries) CountAdminAgents(ctx context.Context, arg CountAdminAgentsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminAgents,
+		arg.Query,
+		arg.WorkspaceID,
+		arg.IncludeArchived,
+		arg.Kind,
+		arg.PermissionMode,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countAdminRuntimes = `-- name: CountAdminRuntimes :one
+SELECT count(*)::bigint
+FROM agent_runtime r
+WHERE ($1::text = '' OR coalesce(r.custom_name, r.name) ILIKE '%' || $1 || '%' OR r.provider ILIKE '%' || $1 || '%')
+AND ($2::uuid IS NULL OR r.workspace_id = $2)
+AND ($3::text = '' OR r.status = $3)
+AND ($4::text = '' OR r.provider = $4)
+`
+
+type CountAdminRuntimesParams struct {
+	Query       string      `json:"query"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Status      string      `json:"status"`
+	Provider    string      `json:"provider"`
+}
+
+func (q *Queries) CountAdminRuntimes(ctx context.Context, arg CountAdminRuntimesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminRuntimes,
+		arg.Query,
+		arg.WorkspaceID,
+		arg.Status,
+		arg.Provider,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countAdminTasks = `-- name: CountAdminTasks :one
+SELECT count(*)::bigint
+FROM agent_task_queue t
+JOIN agent a ON a.id = t.agent_id
+JOIN workspace w ON w.id = a.workspace_id
+LEFT JOIN issue i ON i.id = t.issue_id
+WHERE ($1::text = '' OR t.status = $1)
+AND ($2::uuid IS NULL OR a.workspace_id = $2)
+AND ($3::uuid IS NULL OR t.agent_id = $3)
+AND ($4::uuid IS NULL OR t.runtime_id = $4)
+AND ($5::timestamptz IS NULL OR t.created_at >= $5)
+AND ($6::timestamptz IS NULL OR t.created_at < $6)
+AND (
+    $7::text = ''
+    OR a.name ILIKE '%' || $7 || '%'
+    OR w.name ILIKE '%' || $7 || '%'
+    OR coalesce(i.title, '') ILIKE '%' || $7 || '%'
+    OR coalesce(t.trigger_summary, '') ILIKE '%' || $7 || '%'
+)
+`
+
+type CountAdminTasksParams struct {
+	Status      string             `json:"status"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	RuntimeID   pgtype.UUID        `json:"runtime_id"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	Query       string             `json:"query"`
+}
+
+func (q *Queries) CountAdminTasks(ctx context.Context, arg CountAdminTasksParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminTasks,
+		arg.Status,
+		arg.WorkspaceID,
+		arg.AgentID,
+		arg.RuntimeID,
+		arg.FromAt,
+		arg.ToAt,
+		arg.Query,
+	)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countAdminUsers = `-- name: CountAdminUsers :one
+SELECT count(*)::bigint
+FROM "user" u
+WHERE (
+    $1::text = ''
+    OR u.name ILIKE '%' || $1 || '%'
+    OR u.email ILIKE '%' || $1 || '%'
+)
+`
+
+func (q *Queries) CountAdminUsers(ctx context.Context, query string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminUsers, query)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const countAdminWorkspaces = `-- name: CountAdminWorkspaces :one
+SELECT count(*)::bigint
+FROM workspace w
+WHERE (
+    $1::text = ''
+    OR w.name ILIKE '%' || $1 || '%'
+    OR w.slug ILIKE '%' || $1 || '%'
+)
+`
+
+func (q *Queries) CountAdminWorkspaces(ctx context.Context, query string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminWorkspaces, query)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createPlatformAdmin = `-- name: CreatePlatformAdmin :exec
 INSERT INTO platform_admin (user_id)
 VALUES ($1)
@@ -579,9 +720,12 @@ WITH params AS (
         $1::text AS query,
         $2::uuid AS workspace_id,
         $3::boolean AS include_archived,
-        $4::timestamptz AS cursor_created_at,
-        $5::uuid AS cursor_id,
-        $6::int AS page_limit
+        $4::text AS kind,
+        $5::text AS permission_mode,
+        $6::text AS sort_key,
+        $7::text AS sort_dir,
+        $8::int AS page_limit,
+        $9::int AS page_offset
 )
 SELECT
     a.id,
@@ -608,24 +752,36 @@ CROSS JOIN params p
 WHERE (
     p.query = ''
     OR a.name ILIKE '%' || p.query || '%'
+    OR coalesce(u.name, '') ILIKE '%' || p.query || '%'
 )
 AND (p.workspace_id IS NULL OR a.workspace_id = p.workspace_id)
 AND (p.include_archived OR a.archived_at IS NULL)
-AND (
-    p.cursor_created_at IS NULL
-    OR (a.created_at, a.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY a.created_at DESC, a.id DESC
+AND (p.kind = '' OR a.kind = p.kind)
+AND (p.permission_mode = '' OR a.permission_mode = p.permission_mode)
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN a.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN a.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'runs' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days') END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'runs' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days') END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'archived_at' AND p.sort_dir = 'asc' THEN a.archived_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'archived_at' AND p.sort_dir = 'desc' THEN a.archived_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN a.created_at END ASC NULLS LAST,
+    a.created_at DESC,
+    a.id DESC
 LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params)
 `
 
 type ListAdminAgentsParams struct {
-	Query           string             `json:"query"`
-	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
-	IncludeArchived bool               `json:"include_archived"`
-	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
-	CursorID        pgtype.UUID        `json:"cursor_id"`
-	PageLimit       int32              `json:"page_limit"`
+	Query           string      `json:"query"`
+	WorkspaceID     pgtype.UUID `json:"workspace_id"`
+	IncludeArchived bool        `json:"include_archived"`
+	Kind            string      `json:"kind"`
+	PermissionMode  string      `json:"permission_mode"`
+	SortKey         string      `json:"sort_key"`
+	SortDir         string      `json:"sort_dir"`
+	PageLimit       int32       `json:"page_limit"`
+	PageOffset      int32       `json:"page_offset"`
 }
 
 type ListAdminAgentsRow struct {
@@ -652,9 +808,12 @@ func (q *Queries) ListAdminAgents(ctx context.Context, arg ListAdminAgentsParams
 		arg.Query,
 		arg.WorkspaceID,
 		arg.IncludeArchived,
-		arg.CursorCreatedAt,
-		arg.CursorID,
+		arg.Kind,
+		arg.PermissionMode,
+		arg.SortKey,
+		arg.SortDir,
 		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err
@@ -697,9 +856,11 @@ WITH params AS (
         $1::text AS query,
         $2::uuid AS workspace_id,
         $3::text AS status,
-        $4::timestamptz AS cursor_created_at,
-        $5::uuid AS cursor_id,
-        $6::int AS page_limit
+        $4::text AS provider,
+        $5::text AS sort_key,
+        $6::text AS sort_dir,
+        $7::int AS page_limit,
+        $8::int AS page_offset
 )
 SELECT
     r.id,
@@ -727,21 +888,32 @@ WHERE (
 )
 AND (p.workspace_id IS NULL OR r.workspace_id = p.workspace_id)
 AND (p.status = '' OR r.status = p.status)
-AND (
-    p.cursor_created_at IS NULL
-    OR (r.created_at, r.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY r.created_at DESC, r.id DESC
+AND (p.provider = '' OR r.provider = p.provider)
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN coalesce(r.custom_name, r.name) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN coalesce(r.custom_name, r.name) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'asc' THEN r.status END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'desc' THEN r.status END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'provider' AND p.sort_dir = 'asc' THEN r.provider END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'provider' AND p.sort_dir = 'desc' THEN r.provider END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'last_seen_at' AND p.sort_dir = 'asc' THEN r.last_seen_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'last_seen_at' AND p.sort_dir = 'desc' THEN r.last_seen_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN r.created_at END ASC NULLS LAST,
+    r.created_at DESC,
+    r.id DESC
 LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params)
 `
 
 type ListAdminRuntimesParams struct {
-	Query           string             `json:"query"`
-	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
-	Status          string             `json:"status"`
-	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
-	CursorID        pgtype.UUID        `json:"cursor_id"`
-	PageLimit       int32              `json:"page_limit"`
+	Query       string      `json:"query"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Status      string      `json:"status"`
+	Provider    string      `json:"provider"`
+	SortKey     string      `json:"sort_key"`
+	SortDir     string      `json:"sort_dir"`
+	PageLimit   int32       `json:"page_limit"`
+	PageOffset  int32       `json:"page_offset"`
 }
 
 type ListAdminRuntimesRow struct {
@@ -766,9 +938,11 @@ func (q *Queries) ListAdminRuntimes(ctx context.Context, arg ListAdminRuntimesPa
 		arg.Query,
 		arg.WorkspaceID,
 		arg.Status,
-		arg.CursorCreatedAt,
-		arg.CursorID,
+		arg.Provider,
+		arg.SortKey,
+		arg.SortDir,
 		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err
@@ -806,15 +980,17 @@ func (q *Queries) ListAdminRuntimes(ctx context.Context, arg ListAdminRuntimesPa
 const listAdminTasks = `-- name: ListAdminTasks :many
 WITH params AS (
     SELECT
-        $1::text AS status,
-        $2::uuid AS workspace_id,
-        $3::uuid AS agent_id,
-        $4::uuid AS runtime_id,
-        $5::timestamptz AS from_at,
-        $6::timestamptz AS to_at,
-        $7::timestamptz AS cursor_created_at,
-        $8::uuid AS cursor_id,
-        $9::int AS page_limit
+        $1::text AS query,
+        $2::text AS status,
+        $3::uuid AS workspace_id,
+        $4::uuid AS agent_id,
+        $5::uuid AS runtime_id,
+        $6::timestamptz AS from_at,
+        $7::timestamptz AS to_at,
+        $8::text AS sort_key,
+        $9::text AS sort_dir,
+        $10::int AS page_limit,
+        $11::int AS page_offset
 )
 SELECT
     t.id,
@@ -846,33 +1022,49 @@ JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN issue i ON i.id = t.issue_id
 LEFT JOIN agent_runtime r ON r.id = t.runtime_id
 CROSS JOIN params p
-WHERE (
-    p.status = ''
-    OR t.status = p.status
-)
+WHERE (p.status = '' OR t.status = p.status)
 AND (p.workspace_id IS NULL OR a.workspace_id = p.workspace_id)
 AND (p.agent_id IS NULL OR t.agent_id = p.agent_id)
 AND (p.runtime_id IS NULL OR t.runtime_id = p.runtime_id)
 AND (p.from_at IS NULL OR t.created_at >= p.from_at)
 AND (p.to_at IS NULL OR t.created_at < p.to_at)
 AND (
-    p.cursor_created_at IS NULL
-    OR (t.created_at, t.id) < (p.cursor_created_at, p.cursor_id)
+    p.query = ''
+    OR a.name ILIKE '%' || p.query || '%'
+    OR w.name ILIKE '%' || p.query || '%'
+    OR coalesce(i.title, '') ILIKE '%' || p.query || '%'
+    OR coalesce(t.trigger_summary, '') ILIKE '%' || p.query || '%'
 )
-ORDER BY t.created_at DESC, t.id DESC
+ORDER BY
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'asc' THEN t.status END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'status' AND p.sort_dir = 'desc' THEN t.status END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'agent' AND p.sort_dir = 'asc' THEN a.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'agent' AND p.sort_dir = 'desc' THEN a.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspace' AND p.sort_dir = 'asc' THEN w.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspace' AND p.sort_dir = 'desc' THEN w.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'started_at' AND p.sort_dir = 'asc' THEN t.started_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'started_at' AND p.sort_dir = 'desc' THEN t.started_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'completed_at' AND p.sort_dir = 'asc' THEN t.completed_at END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'completed_at' AND p.sort_dir = 'desc' THEN t.completed_at END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN t.created_at END ASC NULLS LAST,
+    t.created_at DESC,
+    t.id DESC
 LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params)
 `
 
 type ListAdminTasksParams struct {
-	Status          string             `json:"status"`
-	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
-	AgentID         pgtype.UUID        `json:"agent_id"`
-	RuntimeID       pgtype.UUID        `json:"runtime_id"`
-	FromAt          pgtype.Timestamptz `json:"from_at"`
-	ToAt            pgtype.Timestamptz `json:"to_at"`
-	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
-	CursorID        pgtype.UUID        `json:"cursor_id"`
-	PageLimit       int32              `json:"page_limit"`
+	Query       string             `json:"query"`
+	Status      string             `json:"status"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
+	RuntimeID   pgtype.UUID        `json:"runtime_id"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	SortKey     string             `json:"sort_key"`
+	SortDir     string             `json:"sort_dir"`
+	PageLimit   int32              `json:"page_limit"`
+	PageOffset  int32              `json:"page_offset"`
 }
 
 type ListAdminTasksRow struct {
@@ -903,15 +1095,17 @@ type ListAdminTasksRow struct {
 
 func (q *Queries) ListAdminTasks(ctx context.Context, arg ListAdminTasksParams) ([]ListAdminTasksRow, error) {
 	rows, err := q.db.Query(ctx, listAdminTasks,
+		arg.Query,
 		arg.Status,
 		arg.WorkspaceID,
 		arg.AgentID,
 		arg.RuntimeID,
 		arg.FromAt,
 		arg.ToAt,
-		arg.CursorCreatedAt,
-		arg.CursorID,
+		arg.SortKey,
+		arg.SortDir,
 		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err
@@ -1186,9 +1380,10 @@ const listAdminUsers = `-- name: ListAdminUsers :many
 WITH params AS (
     SELECT
         $1::text AS query,
-        $2::timestamptz AS cursor_created_at,
-        $3::uuid AS cursor_id,
-        $4::int AS page_limit
+        $2::text AS sort_key,
+        $3::text AS sort_dir,
+        $4::int AS page_limit,
+        $5::int AS page_offset
 )
 SELECT
     u.id,
@@ -1205,19 +1400,26 @@ WHERE (
     OR u.name ILIKE '%' || p.query || '%'
     OR u.email ILIKE '%' || p.query || '%'
 )
-AND (
-    p.cursor_created_at IS NULL
-    OR (u.created_at, u.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY u.created_at DESC, u.id DESC
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN u.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN u.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'email' AND p.sort_dir = 'asc' THEN u.email END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'email' AND p.sort_dir = 'desc' THEN u.email END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspaces' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM member m WHERE m.user_id = u.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'workspaces' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM member m WHERE m.user_id = u.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN u.created_at END ASC NULLS LAST,
+    u.created_at DESC,
+    u.id DESC
 LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params)
 `
 
 type ListAdminUsersParams struct {
-	Query           string             `json:"query"`
-	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
-	CursorID        pgtype.UUID        `json:"cursor_id"`
-	PageLimit       int32              `json:"page_limit"`
+	Query      string `json:"query"`
+	SortKey    string `json:"sort_key"`
+	SortDir    string `json:"sort_dir"`
+	PageLimit  int32  `json:"page_limit"`
+	PageOffset int32  `json:"page_offset"`
 }
 
 type ListAdminUsersRow struct {
@@ -1233,9 +1435,10 @@ type ListAdminUsersRow struct {
 func (q *Queries) ListAdminUsers(ctx context.Context, arg ListAdminUsersParams) ([]ListAdminUsersRow, error) {
 	rows, err := q.db.Query(ctx, listAdminUsers,
 		arg.Query,
-		arg.CursorCreatedAt,
-		arg.CursorID,
+		arg.SortKey,
+		arg.SortDir,
 		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err
@@ -1311,9 +1514,10 @@ const listAdminWorkspaces = `-- name: ListAdminWorkspaces :many
 WITH params AS (
     SELECT
         $1::text AS query,
-        $2::timestamptz AS cursor_created_at,
-        $3::uuid AS cursor_id,
-        $4::int AS page_limit
+        $2::text AS sort_key,
+        $3::text AS sort_dir,
+        $4::int AS page_limit,
+        $5::int AS page_offset
 )
 SELECT
     w.id,
@@ -1332,19 +1536,30 @@ WHERE (
     OR w.name ILIKE '%' || p.query || '%'
     OR w.slug ILIKE '%' || p.query || '%'
 )
-AND (
-    p.cursor_created_at IS NULL
-    OR (w.created_at, w.id) < (p.cursor_created_at, p.cursor_id)
-)
-ORDER BY w.created_at DESC, w.id DESC
+ORDER BY
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'asc' THEN w.name END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'name' AND p.sort_dir = 'desc' THEN w.name END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'members' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM member m WHERE m.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'members' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM member m WHERE m.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'issues' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'issues' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'agents' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'agents' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'runtimes' AND p.sort_dir = 'asc' THEN (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id) END ASC NULLS LAST,
+    CASE WHEN p.sort_key = 'runtimes' AND p.sort_dir = 'desc' THEN (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id) END DESC NULLS LAST,
+    CASE WHEN p.sort_key = 'created_at' AND p.sort_dir = 'asc' THEN w.created_at END ASC NULLS LAST,
+    w.created_at DESC,
+    w.id DESC
 LIMIT (SELECT page_limit FROM params)
+OFFSET (SELECT page_offset FROM params)
 `
 
 type ListAdminWorkspacesParams struct {
-	Query           string             `json:"query"`
-	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
-	CursorID        pgtype.UUID        `json:"cursor_id"`
-	PageLimit       int32              `json:"page_limit"`
+	Query      string `json:"query"`
+	SortKey    string `json:"sort_key"`
+	SortDir    string `json:"sort_dir"`
+	PageLimit  int32  `json:"page_limit"`
+	PageOffset int32  `json:"page_offset"`
 }
 
 type ListAdminWorkspacesRow struct {
@@ -1362,9 +1577,10 @@ type ListAdminWorkspacesRow struct {
 func (q *Queries) ListAdminWorkspaces(ctx context.Context, arg ListAdminWorkspacesParams) ([]ListAdminWorkspacesRow, error) {
 	rows, err := q.db.Query(ctx, listAdminWorkspaces,
 		arg.Query,
-		arg.CursorCreatedAt,
-		arg.CursorID,
+		arg.SortKey,
+		arg.SortDir,
 		arg.PageLimit,
+		arg.PageOffset,
 	)
 	if err != nil {
 		return nil, err

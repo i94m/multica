@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -52,20 +51,35 @@ func listRuntimeResponse(row db.ListAdminRuntimesRow) adminRuntimeResponse {
 
 func (h *Handler) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	cursorAt, cursorID, ok := decodeCursor(queryValue(values, "cursor"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid cursor")
+	req := parsePageRequest(r, map[string]bool{
+		"created_at":   true,
+		"name":         true,
+		"status":       true,
+		"provider":     true,
+		"last_seen_at": true,
+	}, "created_at")
+	filters := db.ListAdminRuntimesParams{
+		Query:       queryValue(values, "q"),
+		WorkspaceID: nullableUUID(queryValue(values, "workspace_id")),
+		Status:      queryValue(values, "status"),
+		Provider:    queryValue(values, "provider"),
+		SortKey:     req.SortKey,
+		SortDir:     req.SortDir,
+		PageLimit:   req.PageSize,
+		PageOffset:  req.Offset,
+	}
+
+	total, err := h.queries.CountAdminRuntimes(r.Context(), db.CountAdminRuntimesParams{
+		Query:       filters.Query,
+		WorkspaceID: filters.WorkspaceID,
+		Status:      filters.Status,
+		Provider:    filters.Provider,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count runtimes")
 		return
 	}
-	limit := parseLimit(queryValue(values, "limit"))
-	rows, err := h.queries.ListAdminRuntimes(r.Context(), db.ListAdminRuntimesParams{
-		Query:           queryValue(values, "q"),
-		WorkspaceID:     nullableUUID(queryValue(values, "workspace_id")),
-		Status:          queryValue(values, "status"),
-		CursorCreatedAt: cursorAt,
-		CursorID:        cursorID,
-		PageLimit:       limit + 1,
-	})
+	rows, err := h.queries.ListAdminRuntimes(r.Context(), filters)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list runtimes")
 		return
@@ -75,9 +89,7 @@ func (h *Handler) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 	for i, row := range rows {
 		items[i] = listRuntimeResponse(row)
 	}
-	writeJSON(w, http.StatusOK, pageFrom(items, limit, func(item adminRuntimeResponse) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.CreatedAt, item.ID)
-	}))
+	writeJSON(w, http.StatusOK, newPageResponse(items, total, req))
 }
 
 func (h *Handler) GetRuntime(w http.ResponseWriter, r *http.Request) {

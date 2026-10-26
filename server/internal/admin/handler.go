@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,16 +16,28 @@ import (
 )
 
 const (
-	defaultPageLimit = 50
-	maxPageLimit     = 200
+	defaultPageSize = 25
+	maxPageSize     = 100
 )
 
 type Handler struct {
 	queries *db.Queries
 }
 
-type page[T any] struct {
+type pageRequest struct {
+	Page     int
+	PageSize int32
+	Offset   int32
+	SortKey  string
+	SortDir  string
+}
+
+type pageResponse[T any] struct {
 	Items      []T     `json:"items"`
+	Total      int64   `json:"total"`
+	Page       int     `json:"page"`
+	PageSize   int32   `json:"page_size"`
+	TotalPages int     `json:"total_pages"`
 	NextCursor *string `json:"next_cursor"`
 	HasMore    bool    `json:"has_more"`
 }
@@ -109,75 +120,61 @@ func timeParamOrDefault(raw string, fallback time.Time) time.Time {
 	return fallback
 }
 
-func parseLimit(raw string) int32 {
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return defaultPageLimit
-	}
-	if value > maxPageLimit {
-		return maxPageLimit
-	}
-	return int32(value)
-}
-
 func queryValue(values url.Values, key string) string {
 	return strings.TrimSpace(values.Get(key))
 }
 
-type cursor struct {
-	CreatedAt time.Time `json:"t"`
-	ID        string    `json:"i"`
+// parsePageRequest implements the traditional page/page_size contract shared
+// by every admin list. Sort keys are validated against the caller's whitelist;
+// unknown keys fall back to the endpoint default instead of reaching SQL.
+func parsePageRequest(r *http.Request, allowedSorts map[string]bool, defaultSort string) pageRequest {
+	values := r.URL.Query()
+	page := 1
+	if parsed, err := strconv.Atoi(queryValue(values, "page")); err == nil && parsed > 0 {
+		page = parsed
+	}
+	size := defaultPageSize
+	if parsed, err := strconv.Atoi(queryValue(values, "page_size")); err == nil && parsed > 0 {
+		size = parsed
+	}
+	if size > maxPageSize {
+		size = maxPageSize
+	}
+
+	sortKey := queryValue(values, "sort")
+	if sortKey == "" || !allowedSorts[sortKey] {
+		sortKey = defaultSort
+	}
+	sortDir := strings.ToLower(queryValue(values, "order"))
+	if sortDir != "asc" && sortDir != "desc" {
+		sortDir = "desc"
+	}
+
+	return pageRequest{
+		Page:     page,
+		PageSize: int32(size),
+		Offset:   int32((page - 1) * size),
+		SortKey:  sortKey,
+		SortDir:  sortDir,
+	}
 }
 
-func encodeCursor(createdAt pgtype.Timestamptz, id pgtype.UUID) *string {
-	if !createdAt.Valid || !id.Valid {
-		return nil
-	}
-	raw, err := json.Marshal(cursor{
-		CreatedAt: createdAt.Time.UTC(),
-		ID:        util.UUIDToString(id),
-	})
-	if err != nil {
-		return nil
-	}
-	encoded := base64.RawURLEncoding.EncodeToString(raw)
-	return &encoded
-}
-
-func decodeCursor(raw string) (pgtype.Timestamptz, pgtype.UUID, bool) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return pgtype.Timestamptz{}, pgtype.UUID{}, true
-	}
-	data, err := base64.RawURLEncoding.DecodeString(raw)
-	if err != nil {
-		return pgtype.Timestamptz{}, pgtype.UUID{}, false
-	}
-	var c cursor
-	if err := json.Unmarshal(data, &c); err != nil {
-		return pgtype.Timestamptz{}, pgtype.UUID{}, false
-	}
-	id, err := util.ParseUUID(c.ID)
-	if err != nil {
-		return pgtype.Timestamptz{}, pgtype.UUID{}, false
-	}
-	return pgtype.Timestamptz{Time: c.CreatedAt, Valid: true}, id, true
-}
-
-func pageFrom[T any](items []T, limit int32, cursorFor func(T) (pgtype.Timestamptz, pgtype.UUID)) page[T] {
-	hasMore := len(items) > int(limit)
-	if hasMore {
-		items = items[:limit]
-	}
-	var next *string
-	if hasMore && len(items) > 0 {
-		t, id := cursorFor(items[len(items)-1])
-		next = encodeCursor(t, id)
-	}
+func newPageResponse[T any](items []T, total int64, req pageRequest) pageResponse[T] {
 	if items == nil {
 		items = []T{}
 	}
-	return page[T]{Items: items, NextCursor: next, HasMore: hasMore}
+	totalPages := 0
+	if total > 0 {
+		totalPages = int((total + int64(req.PageSize) - 1) / int64(req.PageSize))
+	}
+	return pageResponse[T]{
+		Items:      items,
+		Total:      total,
+		Page:       req.Page,
+		PageSize:   req.PageSize,
+		TotalPages: totalPages,
+		HasMore:    int64(req.Page)*int64(req.PageSize) < total,
+	}
 }
 
 func textPtr(value pgtype.Text) *string {
@@ -187,9 +184,9 @@ func textPtr(value pgtype.Text) *string {
 	return &value.String
 }
 
-// timestampString keeps sub-second precision. Admin list cursors are derived
-// from the serialized created_at value, and truncating to seconds makes two
-// rows created in the same second skip each other on the next page.
+// timestampString keeps sub-second precision. Admin responses are also used to
+// reconstruct sort/filter state, so truncating to seconds loses ordering
+// information for rows created in the same second.
 func timestampString(value pgtype.Timestamptz) string {
 	if !value.Valid {
 		return ""
@@ -221,21 +218,6 @@ func dateString(value pgtype.Date) string {
 		return ""
 	}
 	return value.Time.Format("2006-01-02")
-}
-
-// cursorFromStrings rebuilds a keyset cursor from an already-serialized
-// response row, so list handlers do not have to keep the pgtype values around
-// after mapping into their response shape.
-func cursorFromStrings(createdAt, id string) (pgtype.Timestamptz, pgtype.UUID) {
-	t, err := time.Parse(time.RFC3339, createdAt)
-	if err != nil {
-		return pgtype.Timestamptz{}, pgtype.UUID{}
-	}
-	uid, err := util.ParseUUID(id)
-	if err != nil {
-		return pgtype.Timestamptz{}, pgtype.UUID{}
-	}
-	return pgtype.Timestamptz{Time: t, Valid: true}, uid
 }
 
 func truncate(value string, max int) string {

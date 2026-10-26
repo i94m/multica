@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -82,24 +81,42 @@ func listTaskResponse(row db.ListAdminTasksRow) adminTaskResponse {
 
 func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	cursorAt, cursorID, ok := decodeCursor(queryValue(values, "cursor"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid cursor")
+	req := parsePageRequest(r, map[string]bool{
+		"created_at":   true,
+		"status":       true,
+		"agent":        true,
+		"workspace":    true,
+		"started_at":   true,
+		"completed_at": true,
+	}, "created_at")
+	filters := db.ListAdminTasksParams{
+		Query:       queryValue(values, "q"),
+		Status:      queryValue(values, "status"),
+		WorkspaceID: nullableUUID(queryValue(values, "workspace_id")),
+		AgentID:     nullableUUID(queryValue(values, "agent_id")),
+		RuntimeID:   nullableUUID(queryValue(values, "runtime_id")),
+		FromAt:      nullableTime(queryValue(values, "from")),
+		ToAt:        nullableTime(queryValue(values, "to")),
+		SortKey:     req.SortKey,
+		SortDir:     req.SortDir,
+		PageLimit:   req.PageSize,
+		PageOffset:  req.Offset,
+	}
+
+	total, err := h.queries.CountAdminTasks(r.Context(), db.CountAdminTasksParams{
+		Query:       filters.Query,
+		Status:      filters.Status,
+		WorkspaceID: filters.WorkspaceID,
+		AgentID:     filters.AgentID,
+		RuntimeID:   filters.RuntimeID,
+		FromAt:      filters.FromAt,
+		ToAt:        filters.ToAt,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count tasks")
 		return
 	}
-	limit := parseLimit(queryValue(values, "limit"))
-
-	rows, err := h.queries.ListAdminTasks(r.Context(), db.ListAdminTasksParams{
-		Status:          queryValue(values, "status"),
-		WorkspaceID:     nullableUUID(queryValue(values, "workspace_id")),
-		AgentID:         nullableUUID(queryValue(values, "agent_id")),
-		RuntimeID:       nullableUUID(queryValue(values, "runtime_id")),
-		FromAt:          nullableTime(queryValue(values, "from")),
-		ToAt:            nullableTime(queryValue(values, "to")),
-		CursorCreatedAt: cursorAt,
-		CursorID:        cursorID,
-		PageLimit:       limit + 1,
-	})
+	rows, err := h.queries.ListAdminTasks(r.Context(), filters)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list tasks")
 		return
@@ -109,9 +126,7 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	for i, row := range rows {
 		items[i] = listTaskResponse(row)
 	}
-	writeJSON(w, http.StatusOK, pageFrom(items, limit, func(item adminTaskResponse) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.CreatedAt, item.ID)
-	}))
+	writeJSON(w, http.StatusOK, newPageResponse(items, total, req))
 }
 
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {

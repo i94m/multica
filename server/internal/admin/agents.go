@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -57,21 +56,36 @@ func listAgentResponse(row db.ListAdminAgentsRow) adminAgentResponse {
 
 func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	cursorAt, cursorID, ok := decodeCursor(queryValue(values, "cursor"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid cursor")
-		return
-	}
-	limit := parseLimit(queryValue(values, "limit"))
-
-	rows, err := h.queries.ListAdminAgents(r.Context(), db.ListAdminAgentsParams{
+	req := parsePageRequest(r, map[string]bool{
+		"created_at":  true,
+		"name":        true,
+		"runs":        true,
+		"archived_at": true,
+	}, "created_at")
+	filters := db.ListAdminAgentsParams{
 		Query:           queryValue(values, "q"),
 		WorkspaceID:     nullableUUID(queryValue(values, "workspace_id")),
 		IncludeArchived: queryValue(values, "include_archived") == "true",
-		CursorCreatedAt: cursorAt,
-		CursorID:        cursorID,
-		PageLimit:       limit + 1,
+		Kind:            queryValue(values, "kind"),
+		PermissionMode:  queryValue(values, "permission_mode"),
+		SortKey:         req.SortKey,
+		SortDir:         req.SortDir,
+		PageLimit:       req.PageSize,
+		PageOffset:      req.Offset,
+	}
+
+	total, err := h.queries.CountAdminAgents(r.Context(), db.CountAdminAgentsParams{
+		Query:           filters.Query,
+		WorkspaceID:     filters.WorkspaceID,
+		IncludeArchived: filters.IncludeArchived,
+		Kind:            filters.Kind,
+		PermissionMode:  filters.PermissionMode,
 	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count agents")
+		return
+	}
+	rows, err := h.queries.ListAdminAgents(r.Context(), filters)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list agents")
 		return
@@ -81,9 +95,7 @@ func (h *Handler) ListAgents(w http.ResponseWriter, r *http.Request) {
 	for i, row := range rows {
 		items[i] = listAgentResponse(row)
 	}
-	writeJSON(w, http.StatusOK, pageFrom(items, limit, func(item adminAgentResponse) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.CreatedAt, item.ID)
-	}))
+	writeJSON(w, http.StatusOK, newPageResponse(items, total, req))
 }
 
 func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {

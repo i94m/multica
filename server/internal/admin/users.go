@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -58,18 +57,25 @@ func listUserResponse(row db.ListAdminUsersRow) adminUserResponse {
 
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	cursorAt, cursorID, ok := decodeCursor(queryValue(values, "cursor"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid cursor")
+	req := parsePageRequest(r, map[string]bool{
+		"created_at": true,
+		"name":       true,
+		"email":      true,
+		"workspaces": true,
+	}, "created_at")
+	query := queryValue(values, "q")
+
+	total, err := h.queries.CountAdminUsers(r.Context(), query)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count users")
 		return
 	}
-	limit := parseLimit(queryValue(values, "limit"))
-
 	rows, err := h.queries.ListAdminUsers(r.Context(), db.ListAdminUsersParams{
-		Query:           queryValue(values, "q"),
-		CursorCreatedAt: cursorAt,
-		CursorID:        cursorID,
-		PageLimit:       limit + 1,
+		Query:      query,
+		SortKey:    req.SortKey,
+		SortDir:    req.SortDir,
+		PageLimit:  req.PageSize,
+		PageOffset: req.Offset,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list users")
@@ -80,9 +86,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	for i, row := range rows {
 		items[i] = listUserResponse(row)
 	}
-	writeJSON(w, http.StatusOK, pageFrom(items, limit, func(item adminUserResponse) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.CreatedAt, item.ID)
-	}))
+	writeJSON(w, http.StatusOK, newPageResponse(items, total, req))
 }
 
 func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {

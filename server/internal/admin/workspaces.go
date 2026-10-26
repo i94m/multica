@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -62,18 +61,27 @@ func listWorkspaceResponse(row db.ListAdminWorkspacesRow) adminWorkspaceResponse
 
 func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	cursorAt, cursorID, ok := decodeCursor(queryValue(values, "cursor"))
-	if !ok {
-		writeError(w, http.StatusBadRequest, "invalid cursor")
+	req := parsePageRequest(r, map[string]bool{
+		"created_at": true,
+		"name":       true,
+		"members":    true,
+		"issues":     true,
+		"agents":     true,
+		"runtimes":   true,
+	}, "created_at")
+	query := queryValue(values, "q")
+
+	total, err := h.queries.CountAdminWorkspaces(r.Context(), query)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count workspaces")
 		return
 	}
-	limit := parseLimit(queryValue(values, "limit"))
-
 	rows, err := h.queries.ListAdminWorkspaces(r.Context(), db.ListAdminWorkspacesParams{
-		Query:           queryValue(values, "q"),
-		CursorCreatedAt: cursorAt,
-		CursorID:        cursorID,
-		PageLimit:       limit + 1,
+		Query:      query,
+		SortKey:    req.SortKey,
+		SortDir:    req.SortDir,
+		PageLimit:  req.PageSize,
+		PageOffset: req.Offset,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list workspaces")
@@ -84,9 +92,7 @@ func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	for i, row := range rows {
 		items[i] = listWorkspaceResponse(row)
 	}
-	writeJSON(w, http.StatusOK, pageFrom(items, limit, func(item adminWorkspaceResponse) (pgtype.Timestamptz, pgtype.UUID) {
-		return cursorFromStrings(item.CreatedAt, item.ID)
-	}))
+	writeJSON(w, http.StatusOK, newPageResponse(items, total, req))
 }
 
 func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
