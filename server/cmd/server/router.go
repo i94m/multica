@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/multica-ai/multica/server/internal/admin"
 	"github.com/multica-ai/multica/server/internal/analytics"
 	"github.com/multica-ai/multica/server/internal/auth"
 	"github.com/multica-ai/multica/server/internal/cloudruntime"
@@ -2522,6 +2523,10 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			})
 		})
 	})
+
+	// Fork-local platform admin console. Self-contained: it mounts its own
+	// authenticated /api/admin subtree so upstream routes are untouched.
+	admin.RegisterRoutes(r, queries, patCache, cloudPATVerifier, cfSigner)
 
 	return r, h
 }
