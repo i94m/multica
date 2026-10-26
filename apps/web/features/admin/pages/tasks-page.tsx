@@ -1,15 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocale } from "@multica/views/i18n";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@multica/ui/components/ui/select";
+import { Input } from "@multica/ui/components/ui/input";
 import {
   Table,
   TableBody,
@@ -18,16 +12,20 @@ import {
   TableHeader,
   TableRow,
 } from "@multica/ui/components/ui/table";
-import { adminTasksOptions } from "../queries";
+import { adminTasksOptions, adminWorkspacesOptions } from "../queries";
 import { useAdminCopy } from "../i18n";
 import { adminPaths } from "../paths";
+import { useAdminListState } from "../use-list-state";
 import {
+  AdminPagination,
   EmptyState,
   EntityLink,
   ErrorState,
-  LoadMoreButton,
+  FilterSelect,
   LoadingState,
   PageHeader,
+  SearchBar,
+  SortableHead,
   StatusBadge,
   formatCost,
   formatDateTime,
@@ -35,16 +33,48 @@ import {
   formatNumber,
 } from "../components/shared";
 
-const statuses = ["", "queued", "dispatched", "running", "waiting_local_directory", "deferred", "completed", "failed", "cancelled"];
+const statuses = [
+  "",
+  "queued",
+  "dispatched",
+  "running",
+  "waiting_local_directory",
+  "deferred",
+  "completed",
+  "failed",
+  "cancelled",
+];
 
 export default function TasksPage() {
   const copy = useAdminCopy();
   const locale = useLocale();
+  const list = useAdminListState();
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
-  const tasks = useInfiniteQuery(adminTasksOptions({ status }));
+  const [workspaceId, setWorkspaceId] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const workspaceOptions = useQuery(
+    adminWorkspacesOptions({ page_size: 100, sort: "name", order: "asc" }),
+  );
+  const tasks = useQuery(
+    adminTasksOptions({
+      page: list.page,
+      page_size: list.pageSize,
+      sort: list.sort,
+      order: list.order,
+      q: query,
+      status,
+      workspace_id: workspaceId,
+      from,
+      to,
+    }),
+  );
 
   if (tasks.isLoading) return <LoadingState label={copy.common.loading} />;
-  if (tasks.isError) {
+  if (tasks.isError || !tasks.data) {
     return (
       <ErrorState
         label={copy.common.error}
@@ -56,55 +86,135 @@ export default function TasksPage() {
     );
   }
 
-  const items = tasks.data?.pages.flatMap((page) => page.items) ?? [];
+  const data = tasks.data;
   const statusItems = statuses.map((value) => ({
-    value: value || "all",
-    label: value || copy.common.all,
+    value,
+    label: value || copy.common.allStatuses,
   }));
+  const workspaceItems = [
+    { value: "", label: copy.common.allWorkspaces },
+    ...(workspaceOptions.data?.items.map((workspace) => ({
+      value: workspace.id,
+      label: workspace.name,
+    })) ?? []),
+  ];
+
+  const resetPage = list.resetPage;
 
   return (
     <div className="space-y-4">
       <PageHeader
         title={copy.nav.tasks}
         actions={
-          <Select
-            items={statusItems}
-            value={status || "all"}
-            onValueChange={(next) => setStatus(!next || next === "all" ? "" : next)}
-          >
-            <SelectTrigger className="w-44" aria-label={copy.common.status}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent alignItemWithTrigger={false}>
-              {statusItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            onSubmit={() => {
+              setQuery(search.trim());
+              resetPage();
+            }}
+            placeholder={copy.common.searchPlaceholder}
+            label={copy.common.search}
+          />
         }
       />
 
-      {items.length === 0 ? (
-        <EmptyState label={copy.common.empty} />
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-surface-border bg-surface">
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect
+          value={status}
+          onChange={(value) => {
+            setStatus(value);
+            resetPage();
+          }}
+          items={statusItems}
+          label={copy.common.status}
+        />
+        <FilterSelect
+          value={workspaceId}
+          onChange={(value) => {
+            setWorkspaceId(value);
+            resetPage();
+          }}
+          items={workspaceItems}
+          label={copy.common.workspace}
+          className="w-56"
+        />
+        <label className="flex items-center gap-2 text-caption text-muted-foreground">
+          {copy.common.from}
+          <Input
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              resetPage();
+            }}
+            className="w-40"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-caption text-muted-foreground">
+          {copy.common.to}
+          <Input
+            type="date"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+              resetPage();
+            }}
+            className="w-40"
+          />
+        </label>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-surface-border bg-surface">
+        {data.items.length === 0 ? (
+          <EmptyState label={copy.common.empty} />
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{copy.common.status}</TableHead>
-                <TableHead>{copy.common.agent}</TableHead>
-                <TableHead>{copy.common.workspace}</TableHead>
+                <SortableHead
+                  label={copy.common.status}
+                  column="status"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
+                <SortableHead
+                  label={copy.common.agent}
+                  column="agent"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
+                <SortableHead
+                  label={copy.common.workspace}
+                  column="workspace"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
                 <TableHead>{copy.common.issue}</TableHead>
                 <TableHead>{copy.common.runtime}</TableHead>
-                <TableHead>{copy.common.created}</TableHead>
-                <TableHead className="text-right">{copy.common.duration}</TableHead>
+                <SortableHead
+                  label={copy.common.created}
+                  column="created_at"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
+                <SortableHead
+                  label={copy.common.duration}
+                  column="started_at"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                  className="text-right"
+                />
                 <TableHead className="text-right">{copy.common.cost}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((task) => (
+              {data.items.map((task) => (
                 <TableRow key={task.id}>
                   <TableCell>
                     <StatusBadge status={task.status} />
@@ -137,16 +247,22 @@ export default function TasksPage() {
               ))}
             </TableBody>
           </Table>
-          <LoadMoreButton
-            hasNext={tasks.hasNextPage}
-            loading={tasks.isFetchingNextPage}
-            label={copy.common.loadMore}
-            onClick={() => {
-              void tasks.fetchNextPage();
-            }}
-          />
-        </div>
-      )}
+        )}
+        <AdminPagination
+          page={data.page}
+          pageSize={data.page_size}
+          total={data.total}
+          totalPages={data.total_pages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          labels={{
+            results: `${copy.common.showing} ${formatNumber(data.total, locale)} ${copy.common.results}`,
+            pageSize: copy.common.pageSize,
+            previous: copy.common.previous,
+            next: copy.common.next,
+          }}
+        />
+      </div>
     </div>
   );
 }

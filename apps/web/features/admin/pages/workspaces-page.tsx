@@ -1,27 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocale } from "@multica/views/i18n";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@multica/ui/components/ui/table";
 import { adminWorkspacesOptions } from "../queries";
 import { useAdminCopy } from "../i18n";
 import { adminPaths } from "../paths";
+import { useAdminListState } from "../use-list-state";
 import {
+  AdminPagination,
   EmptyState,
   EntityLink,
   ErrorState,
-  LoadMoreButton,
   LoadingState,
   PageHeader,
   SearchBar,
+  SortableHead,
   formatDateTime,
   formatNumber,
 } from "../components/shared";
@@ -29,12 +30,21 @@ import {
 export default function WorkspacesPage() {
   const copy = useAdminCopy();
   const locale = useLocale();
+  const list = useAdminListState();
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const workspaces = useInfiniteQuery(adminWorkspacesOptions({ q: query }));
+  const workspaces = useQuery(
+    adminWorkspacesOptions({
+      page: list.page,
+      page_size: list.pageSize,
+      sort: list.sort,
+      order: list.order,
+      q: query,
+    }),
+  );
 
   if (workspaces.isLoading) return <LoadingState label={copy.common.loading} />;
-  if (workspaces.isError) {
+  if (workspaces.isError || !workspaces.data) {
     return (
       <ErrorState
         label={copy.common.error}
@@ -46,7 +56,7 @@ export default function WorkspacesPage() {
     );
   }
 
-  const items = workspaces.data?.pages.flatMap((page) => page.items) ?? [];
+  const data = workspaces.data;
 
   return (
     <div className="space-y-4">
@@ -56,30 +66,73 @@ export default function WorkspacesPage() {
           <SearchBar
             value={search}
             onChange={setSearch}
-            onSubmit={() => setQuery(search.trim())}
+            onSubmit={() => {
+              setQuery(search.trim());
+              list.resetPage();
+            }}
             placeholder={copy.common.searchPlaceholder}
             label={copy.common.search}
           />
         }
       />
 
-      {items.length === 0 ? (
-        <EmptyState label={copy.common.empty} />
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-surface-border bg-surface">
+      <div className="overflow-hidden rounded-xl border border-surface-border bg-surface">
+        {data.items.length === 0 ? (
+          <EmptyState label={copy.common.empty} />
+        ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{copy.common.name}</TableHead>
-                <TableHead className="text-right">{copy.common.members}</TableHead>
-                <TableHead className="text-right">{copy.common.issues}</TableHead>
-                <TableHead className="text-right">{copy.common.agents}</TableHead>
-                <TableHead className="text-right">{copy.common.runtimes}</TableHead>
-                <TableHead>{copy.common.created}</TableHead>
+                <SortableHead
+                  label={copy.common.name}
+                  column="name"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
+                <SortableHead
+                  label={copy.common.members}
+                  column="members"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                  className="text-right"
+                />
+                <SortableHead
+                  label={copy.common.issues}
+                  column="issues"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                  className="text-right"
+                />
+                <SortableHead
+                  label={copy.common.agents}
+                  column="agents"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                  className="text-right"
+                />
+                <SortableHead
+                  label={copy.common.runtimes}
+                  column="runtimes"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                  className="text-right"
+                />
+                <SortableHead
+                  label={copy.common.created}
+                  column="created_at"
+                  sort={list.sort}
+                  order={list.order}
+                  onSort={list.onSort}
+                />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((workspace) => (
+              {data.items.map((workspace) => (
                 <TableRow key={workspace.id}>
                   <TableCell>
                     <EntityLink href={adminPaths.workspace(workspace.id)}>
@@ -106,16 +159,22 @@ export default function WorkspacesPage() {
               ))}
             </TableBody>
           </Table>
-          <LoadMoreButton
-            hasNext={workspaces.hasNextPage}
-            loading={workspaces.isFetchingNextPage}
-            label={copy.common.loadMore}
-            onClick={() => {
-              void workspaces.fetchNextPage();
-            }}
-          />
-        </div>
-      )}
+        )}
+        <AdminPagination
+          page={data.page}
+          pageSize={data.page_size}
+          total={data.total}
+          totalPages={data.total_pages}
+          onPageChange={list.setPage}
+          onPageSizeChange={list.setPageSize}
+          labels={{
+            results: `${copy.common.showing} ${formatNumber(data.total, locale)} ${copy.common.results}`,
+            pageSize: copy.common.pageSize,
+            previous: copy.common.previous,
+            next: copy.common.next,
+          }}
+        />
+      </div>
     </div>
   );
 }

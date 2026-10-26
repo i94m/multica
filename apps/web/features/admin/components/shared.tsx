@@ -12,6 +12,15 @@ import {
   CardTitle,
 } from "@multica/ui/components/ui/card";
 import { Input } from "@multica/ui/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@multica/ui/components/ui/select";
+import { TableHead } from "@multica/ui/components/ui/table";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 export function PageHeader({
   title,
@@ -237,4 +246,167 @@ export function formatDuration(start: string | null, end: string | null): string
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h ${minutes % 60}m`;
+}
+
+export type SortOrder = "asc" | "desc";
+
+export function SortableHead({
+  label,
+  column,
+  sort,
+  order,
+  onSort,
+  className,
+}: {
+  label: string;
+  column: string;
+  sort: string;
+  order: SortOrder;
+  onSort: (column: string) => void;
+  className?: string;
+}) {
+  const active = sort === column;
+  const Icon = !active ? ArrowUpDown : order === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-left hover:text-foreground"
+        onClick={() => onSort(column)}
+        aria-label={`${label}: ${active ? order : "unsorted"}`}
+      >
+        {label}
+        <Icon className={active ? "size-3.5" : "size-3.5 opacity-40"} />
+      </button>
+    </TableHead>
+  );
+}
+
+export function FilterSelect({
+  value,
+  onChange,
+  items,
+  label,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  items: Array<{ value: string; label: string }>;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <Select items={items} value={value || null} onValueChange={(next) => onChange(next ?? "")}>
+      <SelectTrigger className={className ?? "w-44"} aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false}>
+        {items.map((item) => (
+          <SelectItem key={item.value || "all"} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function pageNumbers(current: number, total: number): Array<number | "ellipsis"> {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const wanted = new Set([1, total, current - 1, current, current + 1]);
+  const pages = Array.from(wanted)
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b);
+  const out: Array<number | "ellipsis"> = [];
+  let previous = 0;
+  for (const page of pages) {
+    if (previous && page - previous > 1) out.push("ellipsis");
+    out.push(page);
+    previous = page;
+  }
+  return out;
+}
+
+export function AdminPagination({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+  labels,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  labels: {
+    results: string;
+    pageSize: string;
+    previous: string;
+    next: string;
+  };
+}) {
+  const pages = pageNumbers(page, totalPages);
+  const sizeItems = [10, 25, 50, 100].map((size) => ({
+    value: String(size),
+    label: `${size} / ${labels.pageSize}`,
+  }));
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-surface-border bg-surface px-3 py-3">
+      <p className="text-caption text-muted-foreground">{labels.results}</p>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+          aria-label={labels.previous}
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        {pages.map((item, index) =>
+          item === "ellipsis" ? (
+            <span key={`ellipsis-${index}`} className="px-1 text-caption text-muted-foreground">
+              …
+            </span>
+          ) : (
+            <Button
+              key={item}
+              variant={item === page ? "default" : "outline"}
+              size="sm"
+              className="min-w-8"
+              onClick={() => onPageChange(item)}
+              aria-current={item === page ? "page" : undefined}
+            >
+              {item}
+            </Button>
+          ),
+        )}
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+          aria-label={labels.next}
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+      </div>
+      <div className="w-40">
+        <FilterSelect
+          value={String(pageSize)}
+          onChange={(value) => onPageSizeChange(Number(value))}
+          items={sizeItems}
+          label={labels.pageSize}
+          className="w-40"
+        />
+      </div>
+    </div>
+  );
 }

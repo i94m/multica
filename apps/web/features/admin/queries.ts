@@ -1,4 +1,4 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { adminApi, type AdminQuery } from "./api";
 
 export const adminKeys = {
@@ -36,12 +36,11 @@ export function adminOverviewOptions(params: AdminQuery = {}) {
 }
 
 export function adminUsersOptions(params: AdminQuery) {
-  return infiniteQueryOptions({
+  return queryOptions({
     queryKey: adminKeys.users(params),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => adminApi.listUsers({ ...params, cursor: pageParam }),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : null),
-    staleTime: 30_000,
+    queryFn: () => adminApi.listUsers(params),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
   });
 }
 
@@ -55,12 +54,11 @@ export function adminUserOptions(id: string) {
 }
 
 export function adminWorkspacesOptions(params: AdminQuery) {
-  return infiniteQueryOptions({
+  return queryOptions({
     queryKey: adminKeys.workspaces(params),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => adminApi.listWorkspaces({ ...params, cursor: pageParam }),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : null),
-    staleTime: 30_000,
+    queryFn: () => adminApi.listWorkspaces(params),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
   });
 }
 
@@ -74,12 +72,11 @@ export function adminWorkspaceOptions(id: string) {
 }
 
 export function adminTasksOptions(params: AdminQuery) {
-  return infiniteQueryOptions({
+  return queryOptions({
     queryKey: adminKeys.tasks(params),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => adminApi.listTasks({ ...params, cursor: pageParam }),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : null),
-    staleTime: 15_000,
+    queryFn: () => adminApi.listTasks(params),
+    placeholderData: keepPreviousData,
+    staleTime: 10_000,
   });
 }
 
@@ -93,12 +90,11 @@ export function adminTaskOptions(id: string) {
 }
 
 export function adminAgentsOptions(params: AdminQuery) {
-  return infiniteQueryOptions({
+  return queryOptions({
     queryKey: adminKeys.agents(params),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => adminApi.listAgents({ ...params, cursor: pageParam }),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : null),
-    staleTime: 30_000,
+    queryFn: () => adminApi.listAgents(params),
+    placeholderData: keepPreviousData,
+    staleTime: 15_000,
   });
 }
 
@@ -112,12 +108,11 @@ export function adminAgentOptions(id: string) {
 }
 
 export function adminRuntimesOptions(params: AdminQuery) {
-  return infiniteQueryOptions({
+  return queryOptions({
     queryKey: adminKeys.runtimes(params),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => adminApi.listRuntimes({ ...params, cursor: pageParam }),
-    getNextPageParam: (lastPage) => (lastPage.has_more ? lastPage.next_cursor : null),
-    staleTime: 15_000,
+    queryFn: () => adminApi.listRuntimes(params),
+    placeholderData: keepPreviousData,
+    staleTime: 10_000,
   });
 }
 

@@ -94,6 +94,10 @@ async function adminGet<T>(
 
 const emptyPage = {
   items: [],
+  total: 0,
+  page: 1,
+  page_size: 25,
+  total_pages: 0,
   next_cursor: null,
   has_more: false,
 };

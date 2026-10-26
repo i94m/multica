@@ -14,7 +14,11 @@ const nullableNumber = z
 function pageSchema<T extends z.ZodTypeAny>(item: T) {
   return z.object({
     items: z.array(item).default([]),
-    next_cursor: nullableString,
+    total: z.number().default(0),
+    page: z.number().default(1),
+    page_size: z.number().default(25),
+    total_pages: z.number().default(0),
+    next_cursor: nullableString.optional().default(null),
     has_more: z.boolean().default(false),
   });
 }
