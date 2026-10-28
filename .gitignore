@@ -51,6 +51,11 @@ server/multica
 test-results/
 apps/web/test-results/
 
+# Local deployment artifacts
+.playwright-mcp/
+backups/
+wget-log
+
 # context (agent workspace)
 .context
 .agent_context/
