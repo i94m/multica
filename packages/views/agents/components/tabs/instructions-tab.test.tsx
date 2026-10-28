@@ -7,6 +7,12 @@ import type { Agent } from "@multica/core/types";
 import { renderWithI18n } from "../../../test/i18n";
 import { InstructionsTab } from "./instructions-tab";
 
+// The role picker owns its own workspace query; these cases only cover prompt
+// editing, so keep them independent of a QueryClient and a live API.
+vi.mock("../agent-role-select", () => ({
+  AgentRoleSelect: () => <select aria-label="Role" />,
+}));
+
 const baseAgent: Agent = {
   id: "agent-1",
   workspace_id: "ws-1",
@@ -56,6 +62,7 @@ describe("InstructionsTab", () => {
 
     expect(onSave).toHaveBeenCalledWith({
       instructions: "Updated instructions.",
+      role_id: null,
     });
   });
 
