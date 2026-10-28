@@ -61,7 +61,8 @@
     "source_runtime_unknown": "來自某個執行時",
     "source_clawhub": "來自 ClawHub",
     "source_skills_sh": "來自 Skills.sh",
-    "source_github": "來自 GitHub"
+    "source_github": "來自 GitHub",
+    "global": "全域"
   },
   "actions": {
     "row_menu": "操作",
@@ -95,7 +96,20 @@
     "cancel": "取消",
     "add_confirm": "新增（{{num}}）",
     "adding": "新增中...",
-    "added_multi_toast_other": "已新增到 {{count}} 個智慧體"
+    "added_multi_toast_other": "已新增到 {{count}} 個智慧體",
+    "set_global": "設為全域 Skill",
+    "move_to_workspace": "移至此工作區",
+    "global_dialog_title": "要將此 Skill 設為全域嗎？",
+    "global_dialog_description": "「{{name}}」將開放給所有工作區使用。所有成員都能將它加入智慧體；只有工作區擁有者與管理員可以編輯。",
+    "global_dialog_warning": "此操作會影響所有工作區。之後仍可將 Skill 移回某個工作區。",
+    "global_dialog_confirm": "設為全域",
+    "move_dialog_title": "要將此 Skill 移至目前工作區嗎？",
+    "move_dialog_description": "「{{name}}」將不再是全域 Skill，而會成為目前工作區的 Skill。",
+    "move_dialog_confirm": "移至工作區",
+    "globalized_toast": "Skill 已設為全域",
+    "moved_to_workspace_toast": "Skill 已移至目前工作區",
+    "scope_failed_toast": "無法變更 Skill 範圍",
+    "saving_scope": "儲存中…"
   },
   "toolbar": {
     "result_count_title": "當前結果 / 全部 skill",

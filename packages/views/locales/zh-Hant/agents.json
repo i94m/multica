@@ -757,7 +757,10 @@
       "add_dialog_confirm_default": "新增",
       "add_dialog_confirm_other": "新增 {{count}} 個 skill",
       "add_dialog_cancel": "取消",
-      "add_failed_toast": "新增 skill 失敗"
+      "add_failed_toast": "新增 skill 失敗",
+      "global_badge": "全域",
+      "global_hint": "自動套用於所有智慧體",
+      "global_notice": "全域 skill 會自動套用於所有智慧體，無法在此個別關閉。"
     },
     "integrations": {
       "members_note": "只有工作區的所有者和管理員可以管理此連線。你可以在\"設定 → 整合\"中檢視已連線的 Bot。"
@@ -1035,5 +1038,48 @@
   "actions": {
     "selected_other": "已選 {{count}} 項",
     "clear_selection": "清除選擇"
+  },
+  "role_select": {
+    "label": "角色",
+    "hint": "選擇角色後，每次執行會自動載入該角色對應的提示詞。",
+    "none": "不使用角色",
+    "view_instructions": "檢視角色提示詞",
+    "no_instructions": "此角色沒有提示詞。"
+  },
+  "roles": {
+    "title": "角色",
+    "tagline": "可供多個智慧體重複使用的共用提示詞。",
+    "new_role": "新增角色",
+    "loading": "正在載入角色…",
+    "empty_title": "尚無角色",
+    "empty_description": "建立一次角色，之後即可在任何智慧體上選用。",
+    "create_title": "新增角色",
+    "edit_title": "編輯角色",
+    "name": "名稱",
+    "name_placeholder": "例如：前端開發",
+    "scope": "範圍",
+    "scope_workspace": "目前工作區",
+    "scope_global": "所有工作區",
+    "scope_hint": "全域角色可在所有工作區使用；工作區角色僅限目前工作區使用。",
+    "scope_change_warning": "儲存後，其他工作區將不再看到此角色，相關智慧體繫結也會一併移除。",
+    "description": "說明",
+    "description_placeholder": "在角色選擇器中顯示的簡短說明",
+    "instructions": "角色提示詞",
+    "instructions_hint": "每次執行時，會先加入這段提示詞，再加入智慧體本身的指示。",
+    "global_badge": "全域",
+    "agent_count": "{{count}} 個智慧體使用此角色",
+    "edit": "編輯",
+    "delete": "刪除",
+    "delete_title": "刪除角色？",
+    "delete_description": "「{{name}}」正被 {{count}} 個智慧體使用。刪除後它們會保留自己的指示，但不再繼承此角色。",
+    "delete_confirm": "刪除角色",
+    "saved": "角色已儲存",
+    "deleted": "角色已刪除",
+    "save_failed": "無法儲存角色",
+    "delete_failed": "無法刪除角色",
+    "name_required": "名稱為必填",
+    "cancel": "取消",
+    "save": "儲存",
+    "saving": "儲存中…"
   }
 }
