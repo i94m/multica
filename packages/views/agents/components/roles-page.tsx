@@ -388,7 +388,7 @@ function RoleRow({
           </p>
         ) : null}
         {role.instructions ? (
-          <p className="mt-1 line-clamp-1 text-caption leading-5 text-muted-foreground/80">
+          <p className="mt-1 line-clamp-1 text-caption leading-5 text-faint-foreground">
             {role.instructions}
           </p>
         ) : null}
