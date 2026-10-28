@@ -24,6 +24,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"agent":                              workspaceDelete,
 	"agent_builder_draft":                workspaceDelete,
 	"agent_invocation_target":            workspaceDelete,
+	"agent_role":                         workspaceDelete,
 	"agent_runtime":                      workspaceDelete,
 	"agent_skill":                        workspaceDelete,
 	"agent_task_queue":                   workspaceDelete,
@@ -107,6 +108,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"notification_preference":            workspaceDelete,
 	"personal_access_token":              workspaceDeleteKeep,
 	"pinned_item":                        workspaceDelete,
+	"platform_admin":                     workspaceDeleteKeep, // Platform-wide admin grants, not workspace-owned.
 	"plugin_installation":                workspaceDelete,
 	"plugin_hook_schedule":               workspaceDelete,
 	"plugin_invocation":                  workspaceDelete,
