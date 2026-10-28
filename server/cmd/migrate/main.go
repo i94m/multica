@@ -143,6 +143,7 @@ var concurrentIndexCleanups = map[string]string{
 	"9996_agent_role_workspace_name_index":                      "idx_agent_role_workspace_name",
 	"9997_agent_role_global_name_index":                         "idx_agent_role_global_name",
 	"9999_skill_global_name_index":                              "idx_skill_global_name",
+	"594_agent_task_process_cleanup_index":                      "idx_agent_task_queue_process_cleanup",
 	"563_search_index_change_changed_at_index":                  "idx_search_index_change_changed_at",
 	"562_search_index_change_workspace_index":                   "idx_search_index_change_workspace_xid",
 	"552_agent_task_history_page_index":                         "idx_agent_task_queue_history_page",
