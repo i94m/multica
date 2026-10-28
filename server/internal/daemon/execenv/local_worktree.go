@@ -793,7 +793,7 @@ func (w *LocalWorktree) commitAll(logger *slog.Logger) (bool, error) {
 // commit" case and (false, err) for a real failure — the distinction callers
 // need to decide whether the tree is safe to discard.
 func commitEverything(worktreePath, message string, allowEmpty bool) (bool, error) {
-	if out, err := runGit(worktreePath, "add", "-A"); err != nil {
+	if out, err := gitAddAll(worktreePath); err != nil {
 		return false, fmt.Errorf("git add: %s: %w", strings.TrimSpace(out), err)
 	}
 	// --no-verify: the user's commit hooks are written for the user's own
@@ -941,7 +941,7 @@ func captureUserSnapshot(gitRoot, envRoot, headSHA string, logger *slog.Logger) 
 	// not a failure — read-tree rebuilds a correct index, merely a colder one —
 	// so the fallback runs on any error from the add, not just from the copy.
 	seeded := seedSnapshotIndex(gitRoot, indexPath)
-	addArgs := append([]string{"add", "-A", "--"}, snapshotExcludes()...)
+	addArgs := gitAddAllArgs(gitRoot, snapshotExcludes()...)
 	if out, err := runGitEnv(gitRoot, env, addArgs...); err != nil {
 		if !seeded {
 			return "", fmt.Errorf("git add: %s: %w", strings.TrimSpace(out), err)
@@ -1022,6 +1022,30 @@ func snapshotExcludes() []string {
 		specs = append(specs, ":(exclude,glob)**/"+name+"/**")
 	}
 	return specs
+}
+
+// gitAddAllArgs builds `git add -A` and adds --sparse when the repository uses
+// a sparse checkout. Without --sparse, an untracked file that lives outside the
+// sparse cone (often a local config such as redisconfig/.redis.ini) makes git
+// refuse the whole add, which used to fail the task before the agent even
+// started. --sparse tells git to index those paths too, preserving the
+// "worktree matches what the user has on disk" contract.
+func gitAddAllArgs(dir string, extra ...string) []string {
+	args := []string{"add", "-A"}
+	if gitSparseCheckoutEnabled(dir) {
+		args = append(args, "--sparse")
+	}
+	args = append(args, "--")
+	return append(args, extra...)
+}
+
+func gitAddAll(dir string, extra ...string) (string, error) {
+	return runGit(dir, gitAddAllArgs(dir, extra...)...)
+}
+
+func gitSparseCheckoutEnabled(dir string) bool {
+	out, err := runGitTrimmed(dir, "config", "--bool", "core.sparseCheckout")
+	return err == nil && out == "true"
 }
 
 // branchOwner is the conversation a task branch belongs to. Recorded with the

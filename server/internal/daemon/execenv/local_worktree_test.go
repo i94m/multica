@@ -2424,3 +2424,29 @@ func TestIsolatedPrepareKeepsTheReadOnlyBranchDrop(t *testing.T) {
 		t.Error("a turn that changed nothing left its branch behind")
 	}
 }
+
+// Sparse checkouts are common in large repos. An untracked file outside the
+// cone (a local config, for example) used to make `git add -A` refuse the whole
+// snapshot, failing the task before the agent started. The snapshot must opt
+// into --sparse and still carry what the user has on disk.
+func TestCaptureUserSnapshotHandlesSparseCheckout(t *testing.T) {
+	t.Parallel()
+	repo := newTestRepo(t)
+
+	writeFile(t, filepath.Join(repo, "sub", "inside.txt"), "inside\n")
+	gitRun(t, repo, "add", "sub/inside.txt")
+	gitRun(t, repo, "commit", "-m", "add sub")
+	gitRun(t, repo, "sparse-checkout", "init", "--cone")
+	gitRun(t, repo, "sparse-checkout", "set", "sub")
+
+	writeFile(t, filepath.Join(repo, "redisconfig", ".redis.ini"), "[redis]\n")
+	head := gitRun(t, repo, "rev-parse", "HEAD")
+	snapshot, err := captureUserSnapshot(repo, t.TempDir(), head, worktreeTestLogger())
+	if err != nil {
+		t.Fatalf("captureUserSnapshot with sparse checkout: %v", err)
+	}
+	listed := gitRun(t, repo, "ls-tree", "-r", "--name-only", snapshot)
+	if !strings.Contains(listed, "redisconfig/.redis.ini") {
+		t.Errorf("snapshot dropped the outside-cone file the user has on disk:\n%s", listed)
+	}
+}
