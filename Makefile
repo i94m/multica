@@ -28,6 +28,11 @@ LOCAL_UPLOAD_BASE_URL ?= http://localhost:$(PORT)
 
 export
 
+# GNU make treats `#` as a comment even inside quotes when it includes .env, so
+# a quoted secret containing `#` reaches Compose truncated. Compose parses .env
+# itself with dotenv semantics; keep the broken make copy from overriding it.
+unexport SMTP_PASSWORD
+
 MULTICA_ARGS ?= $(ARGS)
 
 COMPOSE := docker compose
