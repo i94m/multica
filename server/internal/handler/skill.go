@@ -2642,7 +2642,8 @@ func (h *Handler) SetAgentSkills(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.validateAgentSkillIDsInWorkspace(w, r, agent, skillUUIDs) {
+	skillUUIDs, ok = h.bindableAgentSkillIDs(w, r, agent, skillUUIDs)
+	if !ok {
 		return
 	}
 	if len(skillUUIDs) > 0 && h.rejectQoderOverrides(w, r, agent, qoderOverrides{skills: len(skillUUIDs)}) {
@@ -2701,7 +2702,8 @@ func (h *Handler) AddAgentSkills(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.validateAgentSkillIDsInWorkspace(w, r, agent, skillUUIDs) {
+	skillUUIDs, ok = h.bindableAgentSkillIDs(w, r, agent, skillUUIDs)
+	if !ok {
 		return
 	}
 	if len(skillUUIDs) > 0 && h.rejectQoderOverrides(w, r, agent, qoderOverrides{skills: len(skillUUIDs)}) {
@@ -2756,6 +2758,9 @@ func (h *Handler) SetAgentSkillEnabled(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "enabled is required")
 		return
 	}
+	if h.rejectGlobalSkillMutation(w, r, agent, skillID) {
+		return
+	}
 	rows, err := h.Queries.SetAgentSkillEnabled(r.Context(), db.SetAgentSkillEnabledParams{
 		AgentID: agent.ID,
 		SkillID: skillID,
@@ -2786,6 +2791,9 @@ func (h *Handler) RemoveAgentSkill(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if h.rejectGlobalSkillMutation(w, r, agent, skillID) {
+		return
+	}
 	if err := h.Queries.RemoveAgentSkill(r.Context(), db.RemoveAgentSkillParams{
 		AgentID: agent.ID,
 		SkillID: skillID,
@@ -2796,23 +2804,53 @@ func (h *Handler) RemoveAgentSkill(w http.ResponseWriter, r *http.Request) {
 	h.writeUpdatedAgentSkills(w, r, agent)
 }
 
-func (h *Handler) validateAgentSkillIDsInWorkspace(w http.ResponseWriter, r *http.Request, agent db.Agent, skillUUIDs []pgtype.UUID) bool {
+// rejectGlobalSkillMutation reports true when skillID is a global skill.
+// Global skills apply to every agent automatically, so binding, disabling, or
+// removing them per agent has no meaning and would mislead the caller.
+func (h *Handler) rejectGlobalSkillMutation(w http.ResponseWriter, r *http.Request, agent db.Agent, skillID pgtype.UUID) bool {
+	skill, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
+		ID:          skillID,
+		WorkspaceID: agent.WorkspaceID,
+	})
+	if err != nil {
+		writeError(w, http.StatusNotFound, "skill not found")
+		return true
+	}
+	if !skill.WorkspaceID.Valid {
+		writeError(w, http.StatusConflict, "global skills apply to every agent and cannot be changed per agent")
+		return true
+	}
+	return false
+}
+
+// bindableAgentSkillIDs validates the requested skill IDs and returns the ones
+// that belong to the agent's workspace. Global skills are dropped here: they
+// apply to every agent automatically and are never stored as bindings, so an
+// older client that still sends them in the full replacement list keeps
+// working without creating dead rows.
+func (h *Handler) bindableAgentSkillIDs(w http.ResponseWriter, r *http.Request, agent db.Agent, skillUUIDs []pgtype.UUID) ([]pgtype.UUID, bool) {
 	seen := map[string]struct{}{}
+	bindable := make([]pgtype.UUID, 0, len(skillUUIDs))
 	for _, skillID := range skillUUIDs {
 		key := uuidToString(skillID)
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		if _, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
+		skill, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
 			ID:          skillID,
 			WorkspaceID: agent.WorkspaceID,
-		}); err != nil {
+		})
+		if err != nil {
 			writeError(w, http.StatusNotFound, "skill not found")
-			return false
+			return nil, false
 		}
+		if !skill.WorkspaceID.Valid {
+			continue
+		}
+		bindable = append(bindable, skillID)
 	}
-	return true
+	return bindable, true
 }
 
 func (h *Handler) writeUpdatedAgentSkills(w http.ResponseWriter, r *http.Request, agent db.Agent) {

@@ -1524,13 +1524,36 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Global skills apply to every agent automatically, so they are validated
+	// for visibility but never stored as bindings. An older client that sends
+	// them in skill_ids keeps working without creating dead rows.
+	skillUUIDs, ok := parseUUIDSliceOrBadRequest(w, req.SkillIDs, "skill_ids")
+	if !ok {
+		return
+	}
+	bindableSkillUUIDs := make([]pgtype.UUID, 0, len(skillUUIDs))
+	for _, skillID := range skillUUIDs {
+		skill, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
+			ID:          skillID,
+			WorkspaceID: wsUUID,
+		})
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "skill does not belong to this workspace")
+			return
+		}
+		if skill.WorkspaceID.Valid {
+			bindableSkillUUIDs = append(bindableSkillUUIDs, skillID)
+		}
+	}
+
 	if runtime.Provider == "qoder_cloud" {
 		raw, _ := json.Marshal(req.RuntimeConfig)
 		if err := validateQoderAgentConfig(raw); err != nil {
 			writeError(w, 400, err.Error())
 			return
 		}
-		overrides := qoderOverrides{skills: len(req.SkillIDs), customEnv: len(req.CustomEnv), customArgs: len(req.CustomArgs), mcpConfig: req.McpConfig, model: req.Model, thinkingLevel: req.ThinkingLevel, serviceTier: req.ServiceTier}
+		overrides := qoderOverrides{skills: len(bindableSkillUUIDs), customEnv: len(req.CustomEnv), customArgs: len(req.CustomArgs), mcpConfig: req.McpConfig, model: req.Model, thinkingLevel: req.ThinkingLevel, serviceTier: req.ServiceTier}
 		if err := overrides.validate(); err != nil {
 			writeError(w, 400, err.Error())
 			return
@@ -1617,20 +1640,6 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	allowlist := normaliseComposioToolkitAllowlist(req.ComposioToolkitAllowlist)
 	if !h.composioMCPAppsEnabled(r.Context()) {
 		allowlist = nil
-	}
-
-	skillUUIDs, ok := parseUUIDSliceOrBadRequest(w, req.SkillIDs, "skill_ids")
-	if !ok {
-		return
-	}
-	for _, skillID := range skillUUIDs {
-		if _, err := h.Queries.GetSkillVisibleInWorkspace(r.Context(), db.GetSkillVisibleInWorkspaceParams{
-			ID:          skillID,
-			WorkspaceID: wsUUID,
-		}); err != nil {
-			writeError(w, http.StatusBadRequest, "skill does not belong to this workspace")
-			return
-		}
 	}
 
 	avatarURL, ok := h.newAgentAvatar(w, r, req.AvatarURL)
@@ -1723,7 +1732,7 @@ func (h *Handler) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to save agent access")
 		return
 	}
-	for _, skillID := range skillUUIDs {
+	for _, skillID := range bindableSkillUUIDs {
 		if err := qtx.AddAgentSkill(r.Context(), db.AddAgentSkillParams{
 			AgentID: created.ID,
 			SkillID: skillID,
@@ -2181,12 +2190,19 @@ func (h *Handler) UpdateAgent(w http.ResponseWriter, r *http.Request) {
 			}
 			overrides := storedQoderOverrides(existing)
 			if req.RuntimeID != nil {
-				skills, err := h.Queries.ListAgentSkills(r.Context(), existing.ID)
+				skills, err := h.Queries.ListAgentSkillSummaries(r.Context(), existing.ID)
 				if err != nil {
 					writeError(w, http.StatusInternalServerError, "failed to load agent skills")
 					return
 				}
-				overrides.skills = len(skills)
+				// Global skills are applied by the platform, not configured on
+				// this agent, so they must not trip the Qoder override check.
+				overrides.skills = 0
+				for _, skill := range skills {
+					if skill.WorkspaceID.Valid && skill.Enabled {
+						overrides.skills++
+					}
+				}
 			}
 			if req.CustomArgs != nil {
 				overrides.customArgs = len(*req.CustomArgs)

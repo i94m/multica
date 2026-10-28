@@ -77,14 +77,21 @@ func TestSetSkillScopePromotePreservesBindingsAndMakesSkillVisible(t *testing.T)
 	testutil.Call(t, testHandler.ListSkills, req).Want(http.StatusOK).JSON(&rows)
 	assertSkillIDsPresent(t, rows, skillID)
 
-	// And a fresh agent can bind it without an explicit scope parameter.
+	// A fresh agent gets it automatically: adding a global skill is a no-op
+	// because it is already part of every agent's effective set.
 	otherAgentID := createHandlerTestAgent(t, "Global Skill Bind Agent", nil)
 	testutil.Call(t, testHandler.AddAgentSkills, withURLParam(newRequest(
 		"POST",
 		"/api/agents/"+otherAgentID+"/skills/add",
 		map[string]any{"skill_ids": []string{skillID}},
 	), "id", otherAgentID)).Want(http.StatusOK)
-	assertAgentSkillRowCount(t, otherAgentID, 1)
+	assertAgentSkillRowCount(t, otherAgentID, 0)
+
+	var agentSkills []SkillSummaryResponse
+	testutil.Call(t, testHandler.ListAgentSkills, withURLParam(newRequest(
+		"GET", "/api/agents/"+otherAgentID+"/skills", nil,
+	), "id", otherAgentID)).Want(http.StatusOK).JSON(&agentSkills)
+	assertSkillIDsPresent(t, agentSkills, skillID)
 }
 
 func TestSetSkillScopeDemoteMovesGlobalSkillToCurrentWorkspace(t *testing.T) {

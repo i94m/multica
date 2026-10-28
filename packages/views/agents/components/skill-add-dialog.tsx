@@ -52,11 +52,14 @@ export function SkillAddDialog({
     () => new Set(agent.skills.map((s) => s.id)),
     [agent.skills],
   );
-  // Hide attached skills outright — the dialog is for adding new ones.
-  // If a user wants to see what's already on the agent, the SkillsTab
-  // list above shows it.
+  // Hide attached workspace skills — the dialog is for adding new ones.
+  // Global skills stay visible (the picker renders them disabled) so the
+  // automatic inheritance is discoverable rather than silently missing.
   const availableSkills = useMemo(
-    () => workspaceSkills.filter((s) => !attachedIds.has(s.id)),
+    () =>
+      workspaceSkills.filter(
+        (s) => s.scope === "global" || !attachedIds.has(s.id),
+      ),
     [workspaceSkills, attachedIds],
   );
 

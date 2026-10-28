@@ -145,7 +145,12 @@ export function CreateAgentDialog({
   const [instructions, setInstructions] = useState(template?.instructions ?? "");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(template?.avatar_url ?? null);
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<string>>(
-    () => new Set(template?.skills.map((s) => s.id) ?? []),
+    () =>
+      new Set(
+        (template?.skills ?? [])
+          .filter((skill) => skill.scope !== "global")
+          .map((skill) => skill.id),
+      ),
   );
   const [creating, setCreating] = useState(false);
 

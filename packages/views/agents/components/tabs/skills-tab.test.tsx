@@ -193,6 +193,32 @@ describe("SkillsTab", () => {
     expect(mockRemoveAgentSkill).not.toHaveBeenCalled();
   });
 
+  it("shows a global skill as read-only in the assignment list", async () => {
+    renderSkillsTab({
+      skills: [
+        {
+          id: "skill-global",
+          name: "Platform baseline",
+          description: "Applies to every agent",
+          scope: "global",
+          enabled: true,
+        },
+      ],
+    });
+
+    expect(await screen.findByText("Platform baseline")).toBeInTheDocument();
+    expect(screen.getByText("Global")).toBeInTheDocument();
+    expect(
+      screen.getByText(/cannot be turned off here/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("switch", { name: /Toggle Platform baseline/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Remove Platform baseline/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows inherited skills discovered from the assigned runtime", async () => {
     mockRuntimeCapabilities.mockResolvedValue({
       skills: [

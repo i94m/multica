@@ -174,6 +174,7 @@ export function SkillsTab({
           <ul className="divide-y rounded-lg border bg-surface-raised/40">
             {agent.skills.map((skill) => {
               const enabled = skill.enabled !== false;
+              const isGlobal = skill.scope === "global";
               const busy = busyId === skill.id;
               return (
                 <li key={skill.id} className="flex items-center gap-3 p-3">
@@ -191,15 +192,26 @@ export function SkillsTab({
                       <SkillIcon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className={cn("block text-body font-medium", !enabled && "text-muted-foreground")}>
-                        {skill.name}
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className={cn("truncate text-body font-medium", !enabled && "text-muted-foreground")}>
+                          {skill.name}
+                        </span>
+                        {isGlobal && (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0"
+                            title={t(($) => $.tab_body.skills.global_hint)}
+                          >
+                            {t(($) => $.tab_body.skills.global_badge)}
+                          </Badge>
+                        )}
                       </span>
                       <span className="block truncate text-caption text-muted-foreground">
                         {skill.description || t(($) => $.tab_body.skills.no_description)}
                       </span>
                     </span>
                   </button>
-                  {canEdit && (
+                  {canEdit && !isGlobal && (
                     <>
                       {busy ? (
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
@@ -230,6 +242,11 @@ export function SkillsTab({
               );
             })}
           </ul>
+        )}
+        {agent.skills.some((skill) => skill.scope === "global") && (
+          <p className="text-caption leading-5 text-muted-foreground">
+            {t(($) => $.tab_body.skills.global_notice)}
+          </p>
         )}
       </CapabilitySection>
 

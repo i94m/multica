@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { SkillIcon } from "../../skills/lib/skill-icon";
 import type { SkillSummary } from "@multica/core/types";
+import { Badge } from "@multica/ui/components/ui/badge";
 import { Checkbox } from "@multica/ui/components/ui/checkbox";
 import { Input } from "@multica/ui/components/ui/input";
 import { cn } from "@multica/ui/lib/utils";
@@ -104,15 +105,23 @@ export function SkillPickerList({
         ) : (
           filtered.map((skill) => {
             const isSelected = selectedIds.has(skill.id);
+            // Global skills apply to every agent automatically, so they are
+            // shown for discoverability but can never be toggled per agent.
+            const isGlobal = skill.scope === "global";
             return (
               <button
                 key={skill.id}
                 type="button"
-                onClick={() => onToggle(skill)}
+                onClick={() => {
+                  if (!isGlobal) onToggle(skill);
+                }}
+                disabled={isGlobal}
                 aria-pressed={isSelected}
+                title={isGlobal ? t(($) => $.tab_body.skills.global_hint) : undefined}
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
                   isSelected ? "bg-accent" : "hover:bg-accent/50",
+                  isGlobal && "cursor-not-allowed opacity-60 hover:bg-transparent",
                 )}
               >
                 {/* Indicator only — the wrapping <button> handles clicks,
@@ -125,7 +134,14 @@ export function SkillPickerList({
                 />
                 <SkillIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-body font-medium">{skill.name}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-body font-medium">{skill.name}</span>
+                    {isGlobal && (
+                      <Badge variant="outline" className="shrink-0">
+                        {t(($) => $.tab_body.skills.global_badge)}
+                      </Badge>
+                    )}
+                  </div>
                   {skill.description ? (
                     <div className="truncate text-caption text-muted-foreground">
                       {skill.description}

@@ -133,41 +133,66 @@ DELETE FROM skill_file WHERE skill_id = $1;
 -- Agent-Skill junction
 
 -- name: ListAgentSkills :many
+-- Global skills (workspace_id IS NULL) apply to every agent automatically, so
+-- they are part of the effective set without an agent_skill row. Workspace
+-- skills still require an enabled binding.
 SELECT s.* FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1 AND ask.enabled = TRUE
+WHERE s.workspace_id IS NULL
+   OR EXISTS (
+       SELECT 1 FROM agent_skill ask
+       WHERE ask.agent_id = $1
+         AND ask.skill_id = s.id
+         AND ask.enabled = TRUE
+   )
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillsByIDs :many
--- Scoped variant of ListAgentSkills: the same junction predicate, narrowed to
--- a set of requested skill IDs. The skill-bundle resolve path asks for one
--- skill per request, so loading the agent's whole set there costs a full read
--- and hash of every skill on every request. The junction predicate is also the
--- authorization: an ID the agent does not have enabled simply returns no row,
--- which the caller reports as not-found.
+-- Scoped variant of ListAgentSkills: the same effective-skill predicate,
+-- narrowed to a set of requested skill IDs. The skill-bundle resolve path asks
+-- for one skill per request, so loading the agent's whole set there costs a
+-- full read and hash of every skill on every request. The predicate is also
+-- the authorization: an ID that is neither global nor enabled for this agent
+-- returns no row, which the caller reports as not-found.
 SELECT s.* FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1
-  AND ask.enabled = TRUE
-  AND s.id = ANY(sqlc.arg('skill_ids')::uuid[])
+WHERE s.id = ANY(sqlc.arg('skill_ids')::uuid[])
+  AND (
+      s.workspace_id IS NULL
+      OR EXISTS (
+          SELECT 1 FROM agent_skill ask
+          WHERE ask.agent_id = $1
+            AND ask.skill_id = s.id
+            AND ask.enabled = TRUE
+      )
+  )
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillSummaries :many
 -- Summary variant for the agent skills list endpoint — omits `content` for
 -- the same reason as ListSkillSummariesByWorkspace.
-SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at, ask.enabled
+--
+-- Global skills are listed for every agent and always report enabled: they
+-- are applied automatically and cannot be disabled per agent. Workspace
+-- skills appear only with a binding row and keep that row's enabled state.
+SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at,
+       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
 FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1
+LEFT JOIN agent_skill ask ON ask.skill_id = s.id AND ask.agent_id = $1
+WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillNamesByAgentIDs :many
-SELECT ask.agent_id, s.name
-FROM agent_skill ask
-JOIN skill s ON s.id = ask.skill_id
-WHERE ask.agent_id = ANY(sqlc.arg('agent_ids')::uuid[])
-  AND ask.enabled = TRUE
-ORDER BY ask.agent_id, s.name ASC;
+-- Global skills apply to every agent, so the roster segment must list them even
+-- when an agent has no binding row at all.
+SELECT agents.agent_id::uuid AS agent_id, s.name
+FROM unnest(sqlc.arg('agent_ids')::uuid[]) AS agents(agent_id)
+JOIN skill s ON s.workspace_id IS NULL
+             OR EXISTS (
+                 SELECT 1 FROM agent_skill ask
+                 WHERE ask.agent_id = agents.agent_id
+                   AND ask.skill_id = s.id
+                   AND ask.enabled = TRUE
+             )
+ORDER BY agents.agent_id, s.name ASC;
 
 -- name: AddAgentSkill :exec
 INSERT INTO agent_skill (agent_id, skill_id)
@@ -187,10 +212,17 @@ WHERE agent_id = $1 AND skill_id = $2;
 DELETE FROM agent_skill WHERE agent_id = $1;
 
 -- name: ListAgentSkillsByWorkspace :many
--- Global skills are bindable from any workspace, so the batch agent-list read
--- includes them alongside workspace-owned skills.
-SELECT ask.agent_id, s.id, s.workspace_id, s.name, s.description, ask.enabled
-FROM agent_skill ask
-JOIN skill s ON s.id = ask.skill_id
-WHERE s.workspace_id = $1 OR s.workspace_id IS NULL
+-- Batch agent-list read. Global skills apply to every agent in the workspace,
+-- so they are emitted once per agent instead of only for agents that happen to
+-- have a binding row. Workspace skills keep the binding-row behaviour.
+SELECT a.id AS agent_id, s.id, s.workspace_id, s.name, s.description,
+       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+FROM agent a
+JOIN skill s ON s.workspace_id IS NULL
+             OR EXISTS (
+                 SELECT 1 FROM agent_skill bound
+                 WHERE bound.agent_id = a.id AND bound.skill_id = s.id
+             )
+LEFT JOIN agent_skill ask ON ask.agent_id = a.id AND ask.skill_id = s.id
+WHERE a.workspace_id = $1
 ORDER BY s.name ASC;

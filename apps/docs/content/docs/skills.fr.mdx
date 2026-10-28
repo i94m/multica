@@ -79,7 +79,7 @@ scripts/check.sh
 
 ## Rattacher un skill à un agent
 
-Après sa création ou son import, un skill doit encore être ajouté à des agents précis : choisissez **Ajouter à un agent** sur la page du skill, ou ouvrez l'onglet **Skills** de l'agent et cliquez sur **Ajouter un skill**. L'agent s'appuie sur la description du skill pour décider quand le charger.
+Après sa création ou son import, un skill doit encore être ajouté à des agents précis : choisissez **Ajouter à un agent** sur la page du skill, ou ouvrez l'onglet **Skills** de l'agent et cliquez sur **Ajouter un skill**. L'agent s'appuie sur la description du skill pour décider quand le charger. Les skills globaux font exception : ils s'appliquent automatiquement.
 
 <SkillDemo />
 
@@ -92,7 +92,7 @@ Seuls les membres autorisés à modifier l'agent peuvent ajouter, retirer ou dé
 
 ## Skills globaux
 
-Les `owner` et `admin` d'un espace de travail peuvent rendre un skill global depuis la page du skill. Un skill global n'appartient à aucun espace de travail : tous les espaces de travail peuvent le voir et l'ajouter à leurs agents. Tous les membres peuvent l'utiliser, mais seuls les `owner` et `admin` d'un espace de travail peuvent le modifier ou le supprimer.
+Les `owner` et `admin` d'un espace de travail peuvent rendre un skill global depuis la page du skill. Un skill global n'appartient à aucun espace de travail : tous les espaces de travail peuvent le voir, et il s'applique automatiquement à tous les agents — il n'y a rien à ajouter ni à activer par agent. Tous les membres peuvent l'utiliser, mais seuls les `owner` et `admin` d'un espace de travail peuvent le modifier ou le supprimer.
 
 Pour arrêter le partage, choisissez **Déplacer vers cet espace de travail** sur un skill global. Il devient un skill normal de l'espace de travail courant. Les skills globaux ne prennent pas en charge les labels d'espace de travail.
 

@@ -654,10 +654,9 @@ export interface SetAgentRuntimeSkillEnabledRequest {
 
 /**
  * Minimal skill shape embedded in an Agent payload (`GET /api/agents`,
- * `GET /api/agents/:id`). Only id/name/description are populated — the
- * agent list batch query joins exactly those three columns. For full skill
- * info, use `GET /api/agents/:id/skills` (returns `SkillSummary[]`) or
- * `GET /api/skills/:id` (returns the full `Skill`).
+ * `GET /api/agents/:id`). Only id/name/description/scope/enabled are
+ * populated. For full skill info, use `GET /api/agents/:id/skills` (returns
+ * `SkillSummary[]`) or `GET /api/skills/:id` (returns the full `Skill`).
  */
 export interface AgentSkillSummary {
   id: string;

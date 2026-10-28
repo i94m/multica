@@ -212,12 +212,16 @@ func (q *Queries) GetSkillVisibleInWorkspace(ctx context.Context, arg GetSkillVi
 }
 
 const listAgentSkillNamesByAgentIDs = `-- name: ListAgentSkillNamesByAgentIDs :many
-SELECT ask.agent_id, s.name
-FROM agent_skill ask
-JOIN skill s ON s.id = ask.skill_id
-WHERE ask.agent_id = ANY($1::uuid[])
-  AND ask.enabled = TRUE
-ORDER BY ask.agent_id, s.name ASC
+SELECT agents.agent_id::uuid AS agent_id, s.name
+FROM unnest($1::uuid[]) AS agents(agent_id)
+JOIN skill s ON s.workspace_id IS NULL
+             OR EXISTS (
+                 SELECT 1 FROM agent_skill ask
+                 WHERE ask.agent_id = agents.agent_id
+                   AND ask.skill_id = s.id
+                   AND ask.enabled = TRUE
+             )
+ORDER BY agents.agent_id, s.name ASC
 `
 
 type ListAgentSkillNamesByAgentIDsRow struct {
@@ -225,6 +229,8 @@ type ListAgentSkillNamesByAgentIDsRow struct {
 	Name    string      `json:"name"`
 }
 
+// Global skills apply to every agent, so the roster segment must list them even
+// when an agent has no binding row at all.
 func (q *Queries) ListAgentSkillNamesByAgentIDs(ctx context.Context, agentIds []pgtype.UUID) ([]ListAgentSkillNamesByAgentIDsRow, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillNamesByAgentIDs, agentIds)
 	if err != nil {
@@ -246,10 +252,11 @@ func (q *Queries) ListAgentSkillNamesByAgentIDs(ctx context.Context, agentIds []
 }
 
 const listAgentSkillSummaries = `-- name: ListAgentSkillSummaries :many
-SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at, ask.enabled
+SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at,
+       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
 FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1
+LEFT JOIN agent_skill ask ON ask.skill_id = s.id AND ask.agent_id = $1
+WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL
 ORDER BY s.name ASC
 `
 
@@ -267,6 +274,10 @@ type ListAgentSkillSummariesRow struct {
 
 // Summary variant for the agent skills list endpoint — omits `content` for
 // the same reason as ListSkillSummariesByWorkspace.
+//
+// Global skills are listed for every agent and always report enabled: they
+// are applied automatically and cannot be disabled per agent. Workspace
+// skills appear only with a binding row and keep that row's enabled state.
 func (q *Queries) ListAgentSkillSummaries(ctx context.Context, agentID pgtype.UUID) ([]ListAgentSkillSummariesRow, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillSummaries, agentID)
 	if err != nil {
@@ -300,12 +311,20 @@ func (q *Queries) ListAgentSkillSummaries(ctx context.Context, agentID pgtype.UU
 const listAgentSkills = `-- name: ListAgentSkills :many
 
 SELECT s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1 AND ask.enabled = TRUE
+WHERE s.workspace_id IS NULL
+   OR EXISTS (
+       SELECT 1 FROM agent_skill ask
+       WHERE ask.agent_id = $1
+         AND ask.skill_id = s.id
+         AND ask.enabled = TRUE
+   )
 ORDER BY s.name ASC
 `
 
 // Agent-Skill junction
+// Global skills (workspace_id IS NULL) apply to every agent automatically, so
+// they are part of the effective set without an agent_skill row. Workspace
+// skills still require an enabled binding.
 func (q *Queries) ListAgentSkills(ctx context.Context, agentID pgtype.UUID) ([]Skill, error) {
 	rows, err := q.db.Query(ctx, listAgentSkills, agentID)
 	if err != nil {
@@ -339,10 +358,16 @@ func (q *Queries) ListAgentSkills(ctx context.Context, agentID pgtype.UUID) ([]S
 
 const listAgentSkillsByIDs = `-- name: ListAgentSkillsByIDs :many
 SELECT s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id FROM skill s
-JOIN agent_skill ask ON ask.skill_id = s.id
-WHERE ask.agent_id = $1
-  AND ask.enabled = TRUE
-  AND s.id = ANY($2::uuid[])
+WHERE s.id = ANY($2::uuid[])
+  AND (
+      s.workspace_id IS NULL
+      OR EXISTS (
+          SELECT 1 FROM agent_skill ask
+          WHERE ask.agent_id = $1
+            AND ask.skill_id = s.id
+            AND ask.enabled = TRUE
+      )
+  )
 ORDER BY s.name ASC
 `
 
@@ -351,12 +376,12 @@ type ListAgentSkillsByIDsParams struct {
 	SkillIds []pgtype.UUID `json:"skill_ids"`
 }
 
-// Scoped variant of ListAgentSkills: the same junction predicate, narrowed to
-// a set of requested skill IDs. The skill-bundle resolve path asks for one
-// skill per request, so loading the agent's whole set there costs a full read
-// and hash of every skill on every request. The junction predicate is also the
-// authorization: an ID the agent does not have enabled simply returns no row,
-// which the caller reports as not-found.
+// Scoped variant of ListAgentSkills: the same effective-skill predicate,
+// narrowed to a set of requested skill IDs. The skill-bundle resolve path asks
+// for one skill per request, so loading the agent's whole set there costs a
+// full read and hash of every skill on every request. The predicate is also
+// the authorization: an ID that is neither global nor enabled for this agent
+// returns no row, which the caller reports as not-found.
 func (q *Queries) ListAgentSkillsByIDs(ctx context.Context, arg ListAgentSkillsByIDsParams) ([]Skill, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillsByIDs, arg.AgentID, arg.SkillIds)
 	if err != nil {
@@ -389,10 +414,16 @@ func (q *Queries) ListAgentSkillsByIDs(ctx context.Context, arg ListAgentSkillsB
 }
 
 const listAgentSkillsByWorkspace = `-- name: ListAgentSkillsByWorkspace :many
-SELECT ask.agent_id, s.id, s.workspace_id, s.name, s.description, ask.enabled
-FROM agent_skill ask
-JOIN skill s ON s.id = ask.skill_id
-WHERE s.workspace_id = $1 OR s.workspace_id IS NULL
+SELECT a.id AS agent_id, s.id, s.workspace_id, s.name, s.description,
+       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+FROM agent a
+JOIN skill s ON s.workspace_id IS NULL
+             OR EXISTS (
+                 SELECT 1 FROM agent_skill bound
+                 WHERE bound.agent_id = a.id AND bound.skill_id = s.id
+             )
+LEFT JOIN agent_skill ask ON ask.agent_id = a.id AND ask.skill_id = s.id
+WHERE a.workspace_id = $1
 ORDER BY s.name ASC
 `
 
@@ -405,8 +436,9 @@ type ListAgentSkillsByWorkspaceRow struct {
 	Enabled     bool        `json:"enabled"`
 }
 
-// Global skills are bindable from any workspace, so the batch agent-list read
-// includes them alongside workspace-owned skills.
+// Batch agent-list read. Global skills apply to every agent in the workspace,
+// so they are emitted once per agent instead of only for agents that happen to
+// have a binding row. Workspace skills keep the binding-row behaviour.
 func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentSkillsByWorkspaceRow, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillsByWorkspace, workspaceID)
 	if err != nil {

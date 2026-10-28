@@ -79,7 +79,7 @@ scripts/check.sh
 
 ## Attaching to an agent
 
-After creating or importing a skill, you still need to add it to specific agents: choose **Add to agent** on the skill page, or open the agent's **Skills** tab and click **Add skill**. The agent decides when to load a skill from its description.
+After creating or importing a skill, you still need to add it to specific agents: choose **Add to agent** on the skill page, or open the agent's **Skills** tab and click **Add skill**. The agent decides when to load a skill from its description. Global skills are the exception: they apply automatically.
 
 <SkillDemo />
 
@@ -92,7 +92,7 @@ Only members who can modify the agent can add, remove, or disable its skills.
 
 ## Global skills
 
-Workspace `owner`s and `admin`s can make a skill global from the skill page. A global skill is not owned by one workspace: every workspace can see it and add it to its agents. Any member can use it, but only workspace `owner`s and `admin`s can edit or delete it.
+Workspace `owner`s and `admin`s can make a skill global from the skill page. A global skill is not owned by one workspace: every workspace can see it, and it applies to every agent automatically — there is nothing to attach or toggle per agent. Any member can use it, but only workspace `owner`s and `admin`s can edit or delete it.
 
 To stop sharing a skill, choose **Move to this workspace** on a global skill. It becomes a normal skill of the workspace you are currently in. Global skills do not use workspace labels.
 
