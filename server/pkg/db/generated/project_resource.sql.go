@@ -186,6 +186,58 @@ func (q *Queries) GetProjectResourceInWorkspaceForUpdate(ctx context.Context, ar
 	return i, err
 }
 
+const getProjectResourceVisibleToUser = `-- name: GetProjectResourceVisibleToUser :one
+SELECT pr.id, pr.project_id, pr.workspace_id, pr.resource_type, pr.resource_ref, pr.label, pr.position, pr.created_at, pr.created_by FROM project_resource pr
+WHERE pr.id = $1
+  AND pr.workspace_id = $2
+  AND (
+    pr.resource_type <> 'local_directory'
+    OR pr.created_by = $3
+    OR EXISTS (
+      SELECT 1 FROM agent_runtime ar
+      WHERE ar.workspace_id = pr.workspace_id
+        AND ar.daemon_id = pr.resource_ref->>'daemon_id'
+        AND ar.owner_id = $3
+    )
+    OR (
+      pr.created_by IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM agent_runtime ar
+        WHERE ar.workspace_id = pr.workspace_id
+          AND ar.daemon_id = pr.resource_ref->>'daemon_id'
+          AND ar.owner_id IS NOT NULL
+      )
+    )
+  )
+`
+
+type GetProjectResourceVisibleToUserParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	ViewerID    pgtype.UUID `json:"viewer_id"`
+}
+
+// Same visibility rule as ListProjectResourcesVisibleToUser, for the
+// write-by-id paths: not being able to see a local_directory must also mean not
+// being able to edit or delete it by guessing its id. Keep the two predicates
+// in sync.
+func (q *Queries) GetProjectResourceVisibleToUser(ctx context.Context, arg GetProjectResourceVisibleToUserParams) (ProjectResource, error) {
+	row := q.db.QueryRow(ctx, getProjectResourceVisibleToUser, arg.ID, arg.WorkspaceID, arg.ViewerID)
+	var i ProjectResource
+	err := row.Scan(
+		&i.ID,
+		&i.ProjectID,
+		&i.WorkspaceID,
+		&i.ResourceType,
+		&i.ResourceRef,
+		&i.Label,
+		&i.Position,
+		&i.CreatedAt,
+		&i.CreatedBy,
+	)
+	return i, err
+}
+
 const listProjectResources = `-- name: ListProjectResources :many
 SELECT id, project_id, workspace_id, resource_type, resource_ref, label, position, created_at, created_by FROM project_resource
 WHERE project_id = $1
@@ -274,6 +326,78 @@ type ListProjectResourcesInWorkspaceParams struct {
 // repository URLs or local paths into a claim response.
 func (q *Queries) ListProjectResourcesInWorkspace(ctx context.Context, arg ListProjectResourcesInWorkspaceParams) ([]ProjectResource, error) {
 	rows, err := q.db.Query(ctx, listProjectResourcesInWorkspace, arg.ProjectID, arg.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProjectResource{}
+	for rows.Next() {
+		var i ProjectResource
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProjectID,
+			&i.WorkspaceID,
+			&i.ResourceType,
+			&i.ResourceRef,
+			&i.Label,
+			&i.Position,
+			&i.CreatedAt,
+			&i.CreatedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProjectResourcesVisibleToUser = `-- name: ListProjectResourcesVisibleToUser :many
+SELECT pr.id, pr.project_id, pr.workspace_id, pr.resource_type, pr.resource_ref, pr.label, pr.position, pr.created_at, pr.created_by FROM project_resource pr
+WHERE pr.project_id = $1
+  AND (
+    pr.resource_type <> 'local_directory'
+    OR pr.created_by = $2
+    OR EXISTS (
+      SELECT 1 FROM agent_runtime ar
+      WHERE ar.workspace_id = pr.workspace_id
+        AND ar.daemon_id = pr.resource_ref->>'daemon_id'
+        AND ar.owner_id = $2
+    )
+    OR (
+      pr.created_by IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM agent_runtime ar
+        WHERE ar.workspace_id = pr.workspace_id
+          AND ar.daemon_id = pr.resource_ref->>'daemon_id'
+          AND ar.owner_id IS NOT NULL
+      )
+    )
+  )
+ORDER BY pr.position ASC, pr.created_at ASC
+`
+
+type ListProjectResourcesVisibleToUserParams struct {
+	ProjectID pgtype.UUID `json:"project_id"`
+	ViewerID  pgtype.UUID `json:"viewer_id"`
+}
+
+// Project-page read. A local_directory pins one absolute path on one person's
+// machine, so it is shown only to the member who attached it and to the owner
+// of the daemon it names; repo resources stay shared workspace config and are
+// visible to every member. The daemon claim path deliberately does NOT use this
+// query: a claim is answered for the daemon that will run the task, and
+// filtering by the requesting user there would drop the caller's own path.
+//
+// A row that cannot be attributed to anyone — no creator recorded and no
+// runtime ever registered an owner for its daemon_id — stays visible to every
+// member. Those are legacy rows and shared-machine daemons registered without
+// user credentials; hiding them would strand data nobody could then see or
+// delete, while attributing them to a member would be a guess.
+func (q *Queries) ListProjectResourcesVisibleToUser(ctx context.Context, arg ListProjectResourcesVisibleToUserParams) ([]ProjectResource, error) {
+	rows, err := q.db.Query(ctx, listProjectResourcesVisibleToUser, arg.ProjectID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}

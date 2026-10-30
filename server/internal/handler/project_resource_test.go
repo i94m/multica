@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/multica-ai/multica/server/internal/testutil"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
@@ -1877,5 +1879,154 @@ func TestProjectResourceRejectsInvalidCheckoutRef(t *testing.T) {
 	}
 	if clearedRef.URL != "https://github.com/multica-ai/multica" {
 		t.Fatalf("url after clearing the ref = %q, want it preserved", clearedRef.URL)
+	}
+}
+
+// TestListProjectResources_ScopesLocalDirectoriesToTheirOwner pins the
+// project-page visibility rule: a local_directory names an absolute path on one
+// person's machine, so it is returned only to the member who attached it and to
+// the owner of the daemon it names. Repository resources stay shared workspace
+// config, and a row the viewer cannot see cannot be edited or deleted by id
+// either.
+func TestListProjectResources_ScopesLocalDirectoriesToTheirOwner(t *testing.T) {
+	if testHandler == nil {
+		t.Skip("database not available")
+	}
+
+	projectID := dbfx.Project(t, "Resource visibility project")
+	otherUserID := dbfx.User(t, "Other Resource Owner", "resource-visibility-other@multica.ai")
+	dbfx.Member(t, testWorkspaceID, otherUserID, "member")
+
+	const (
+		myDaemon      = "01a1ffff-0000-7000-8000-000000000001"
+		myOtherDaemon = "01a1ffff-0000-7000-8000-000000000002"
+		theirDaemon   = "01a1ffff-0000-7000-8000-000000000003"
+	)
+	// Runtime rows are how the server learns which member owns a daemon.
+	dbfx.Runtime(t, "My machine", testutil.Cols{
+		"daemon_id": myDaemon, "owner_id": testUserID, "runtime_mode": "local",
+	})
+	dbfx.Runtime(t, "My other machine", testutil.Cols{
+		"daemon_id": myOtherDaemon, "owner_id": testUserID, "runtime_mode": "local",
+	})
+	dbfx.Runtime(t, "Their machine", testutil.Cols{
+		"daemon_id": theirDaemon, "owner_id": otherUserID, "runtime_mode": "local",
+	})
+
+	insertLocalDirectory := func(daemonID, localPath, creator string, position int) string {
+		t.Helper()
+		return dbfx.Insert(t, "project_resource", testutil.Cols{
+			"project_id":    projectID,
+			"workspace_id":  testWorkspaceID,
+			"resource_type": "local_directory",
+			"resource_ref": testutil.Raw(fmt.Sprintf(
+				`'{"daemon_id": %q, "local_path": %q, "execution_mode": "in_place"}'::jsonb`,
+				daemonID, localPath)),
+			"position":   position,
+			"created_by": creator,
+		})
+	}
+
+	mine := insertLocalDirectory(myDaemon, "/Users/me/project", testUserID, 0)
+	// Attached by the other member but pinned to a daemon I own: daemon
+	// ownership wins over who clicked save, because the path is what has to
+	// stay private.
+	mineByDaemon := insertLocalDirectory(myOtherDaemon, "/Users/me/shared-machine", otherUserID, 1)
+	theirs := insertLocalDirectory(theirDaemon, "/Users/them/project", otherUserID, 2)
+	// No creator and no runtime ever registered an owner for this daemon: the
+	// row cannot be attributed to anyone, so hiding it would strand data nobody
+	// could then see or delete. It stays visible to the whole workspace.
+	legacy := dbfx.Insert(t, "project_resource", testutil.Cols{
+		"project_id":    projectID,
+		"workspace_id":  testWorkspaceID,
+		"resource_type": "local_directory",
+		"resource_ref":  testutil.Raw(`'{"daemon_id": "01a1ffff-0000-7000-8000-0000000000ff", "local_path": "/srv/shared-checkout"}'::jsonb`),
+		"position":      3,
+	})
+	repo := dbfx.Insert(t, "project_resource", testutil.Cols{
+		"project_id":    projectID,
+		"workspace_id":  testWorkspaceID,
+		"resource_type": "github_repo",
+		"resource_ref":  testutil.Raw(`'{"url": "https://github.com/multica-ai/multica"}'::jsonb`),
+		"position":      4,
+		"created_by":    otherUserID,
+	})
+
+	listResourceIDs := func(t *testing.T, userID string) ([]string, string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		req := newRequestAs(userID, "GET", "/api/projects/"+projectID+"/resources", nil)
+		req = withURLParam(req, "id", projectID)
+		testHandler.ListProjectResources(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("ListProjectResources as %s: expected 200, got %d: %s", userID, w.Code, w.Body.String())
+		}
+		var resp struct {
+			Resources []ProjectResourceResponse `json:"resources"`
+		}
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode ListProjectResources: %v", err)
+		}
+		ids := make([]string, len(resp.Resources))
+		for i, r := range resp.Resources {
+			ids[i] = r.ID
+		}
+		return ids, w.Body.String()
+	}
+
+	assertIDs := func(t *testing.T, got []string, want map[string]bool, label string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Fatalf("%s: got %d resources (%v), want %d (%v)", label, len(got), got, len(want), want)
+		}
+		for _, id := range got {
+			if !want[id] {
+				t.Fatalf("%s: unexpected resource %s in %v", label, id, got)
+			}
+		}
+	}
+
+	myIDs, myBody := listResourceIDs(t, testUserID)
+	assertIDs(t, myIDs, map[string]bool{mine: true, mineByDaemon: true, legacy: true, repo: true}, "as owner of the daemons")
+	// The other member's path must not reach the wire at all — a list that
+	// merely omits the row from the array but leaks the ref elsewhere would
+	// still expose another person's filesystem layout.
+	if strings.Contains(myBody, "/Users/them/project") {
+		t.Fatalf("another member's local path leaked into my list response: %s", myBody)
+	}
+
+	theirIDs, _ := listResourceIDs(t, otherUserID)
+	assertIDs(t, theirIDs, map[string]bool{mineByDaemon: true, theirs: true, legacy: true, repo: true}, "as the other member")
+
+	// Visibility is also write permission: the other member's row is untouchable
+	// by id.
+	w := httptest.NewRecorder()
+	req := newRequestAs(testUserID, "PUT", "/api/projects/"+projectID+"/resources/"+theirs, map[string]any{
+		"label": "hijacked",
+	})
+	req = withURLParams(req, "id", projectID, "resourceId", theirs)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("update another member's local_directory: expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequestAs(testUserID, "DELETE", "/api/projects/"+projectID+"/resources/"+theirs, nil)
+	req = withURLParams(req, "id", projectID, "resourceId", theirs)
+	testHandler.DeleteProjectResource(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("delete another member's local_directory: expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+	if n := dbfx.Count(t, "SELECT count(*) FROM project_resource WHERE id = $1", theirs); n != 1 {
+		t.Fatalf("another member's resource was deleted through the visibility gate (rows=%d)", n)
+	}
+
+	// The gate must not over-block: its owner can still remove it.
+	w = httptest.NewRecorder()
+	req = newRequestAs(otherUserID, "DELETE", "/api/projects/"+projectID+"/resources/"+theirs, nil)
+	req = withURLParams(req, "id", projectID, "resourceId", theirs)
+	testHandler.DeleteProjectResource(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("owner delete: expected 204, got %d: %s", w.Code, w.Body.String())
 	}
 }

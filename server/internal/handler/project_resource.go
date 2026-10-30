@@ -532,13 +532,27 @@ func (h *Handler) loadProjectForResource(w http.ResponseWriter, r *http.Request,
 	return project, true
 }
 
-// ListProjectResources returns the resources attached to a project.
+// ListProjectResources returns the resources attached to a project, as seen by
+// the requesting member. A local_directory is a path on one person's machine, so
+// it is returned only to its creator and to the owner of the daemon it names;
+// every other resource type is shared workspace configuration.
+//
+// The project list's resource_count stays workspace-wide on purpose: it is a
+// plain number and filtering it per viewer would make the same project report
+// different sizes to different people.
 func (h *Handler) ListProjectResources(w http.ResponseWriter, r *http.Request) {
 	project, ok := h.loadProjectForResource(w, r, chi.URLParam(r, "id"))
 	if !ok {
 		return
 	}
-	resources, err := h.Queries.ListProjectResources(r.Context(), project.ID)
+	_, viewer, ok := h.requireViewer(w, r)
+	if !ok {
+		return
+	}
+	resources, err := h.Queries.ListProjectResourcesVisibleToUser(r.Context(), db.ListProjectResourcesVisibleToUserParams{
+		ProjectID: project.ID,
+		ViewerID:  viewer,
+	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list project resources")
 		return
@@ -548,6 +562,35 @@ func (h *Handler) ListProjectResources(w http.ResponseWriter, r *http.Request) {
 		resp[i] = projectResourceToResponse(res)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"resources": resp, "total": len(resp)})
+}
+
+// requireViewer resolves the authenticated member both as the raw id (for
+// audit/publish payloads) and as a UUID for the per-viewer visibility queries.
+// A missing or unparsable principal fails closed: the read must never widen to
+// "every member's resources" just because the caller could not be identified.
+func (h *Handler) requireViewer(w http.ResponseWriter, r *http.Request) (string, pgtype.UUID, bool) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return "", pgtype.UUID{}, false
+	}
+	viewer, parsed := h.parseUserUUIDOrZero(userID)
+	if !parsed {
+		writeError(w, http.StatusUnauthorized, "user not authenticated")
+		return "", pgtype.UUID{}, false
+	}
+	return userID, viewer, true
+}
+
+// loadProjectResourceForViewer reads a resource the caller is allowed to see.
+// Visibility doubles as write permission: not seeing another member's
+// local_directory on the project page must also mean not being able to edit or
+// delete it by guessing its id. Shared types are unaffected.
+func (h *Handler) loadProjectResourceForViewer(ctx context.Context, q *db.Queries, resourceID, workspaceID, viewer pgtype.UUID) (db.ProjectResource, error) {
+	return q.GetProjectResourceVisibleToUser(ctx, db.GetProjectResourceVisibleToUserParams{
+		ID:          resourceID,
+		WorkspaceID: workspaceID,
+		ViewerID:    viewer,
+	})
 }
 
 // CreateProjectResource attaches a new resource to a project.
@@ -646,7 +689,7 @@ func (h *Handler) UpdateProjectResource(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	userID, ok := requireUserID(w, r)
+	userID, viewer, ok := h.requireViewer(w, r)
 	if !ok {
 		return
 	}
@@ -674,6 +717,17 @@ func (h *Handler) UpdateProjectResource(w http.ResponseWriter, r *http.Request) 
 	}
 	if uuidToString(existing.ProjectID) != uuidToString(project.ID) {
 		writeError(w, http.StatusNotFound, "project resource not found")
+		return
+	}
+	// A member only edits what the project page shows them. Read through the
+	// same transaction (qtx) so the check sees the locked row and borrows no
+	// second pooled connection.
+	if _, err := h.loadProjectResourceForViewer(r.Context(), qtx, resourceUUID, project.WorkspaceID, viewer); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "project resource not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load project resource")
 		return
 	}
 
@@ -901,7 +955,7 @@ func (h *Handler) DeleteProjectResource(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	userID, ok := requireUserID(w, r)
+	userID, viewer, ok := h.requireViewer(w, r)
 	if !ok {
 		return
 	}
@@ -914,6 +968,16 @@ func (h *Handler) DeleteProjectResource(w http.ResponseWriter, r *http.Request) 
 	}
 	if uuidToString(resource.ProjectID) != uuidToString(project.ID) {
 		writeError(w, http.StatusNotFound, "project resource not found")
+		return
+	}
+	// Deletion follows the same visibility rule as edit: a path you cannot see
+	// is not a path you may remove.
+	if _, err := h.loadProjectResourceForViewer(r.Context(), h.Queries, resource.ID, project.WorkspaceID, viewer); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "project resource not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load project resource")
 		return
 	}
 	if err := h.Queries.DeleteProjectResource(r.Context(), resource.ID); err != nil {
