@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@multica/ui/components/ui/select";
-import { Info } from "lucide-react";
+import { Info } from "@multica/ui/icons";
 import { useT } from "../../i18n";
 
 const NO_ROLE = "__no_role__";

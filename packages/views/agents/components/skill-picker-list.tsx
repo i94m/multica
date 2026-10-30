@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search } from "@multica/ui/icons";
 import { SkillIcon } from "../../skills/lib/skill-icon";
 import type { SkillSummary } from "@multica/core/types";
 import { Badge } from "@multica/ui/components/ui/badge";

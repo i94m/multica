@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, Loader2 } from "lucide-react";
+import { Globe, Loader2 } from "@multica/ui/icons";
 import { toast } from "sonner";
 import type { SkillSummary } from "@multica/core/types";
 import { useSetSkillScope } from "@multica/core/skills/mutations";

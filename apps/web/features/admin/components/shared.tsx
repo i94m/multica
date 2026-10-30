@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { TableHead } from "@multica/ui/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from "@multica/ui/icons";
 
 export function PageHeader({
   title,

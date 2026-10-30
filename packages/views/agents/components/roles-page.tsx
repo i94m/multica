@@ -39,7 +39,7 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { CircleUser, Globe, Pencil, Plus, Trash2 } from "lucide-react";
+import { CircleUser, Globe, Pencil, Plus, Trash2 } from "@multica/ui/icons";
 import { toast } from "sonner";
 import { useT } from "../../i18n";
 import {

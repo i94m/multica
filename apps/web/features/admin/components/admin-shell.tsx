@@ -13,7 +13,7 @@ import {
   Monitor,
   Shield,
   Users,
-} from "lucide-react";
+} from "@multica/ui/icons";
 import { useAuthStore } from "@multica/core/auth";
 import { Button } from "@multica/ui/components/ui/button";
 import { cn } from "@multica/ui/lib/utils";

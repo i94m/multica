@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Check } from "lucide-react";
+import { CalendarDays, Check } from "@multica/ui/icons";
 import {
   dateOnlyToLocalDate,
   formatDateOnly,
