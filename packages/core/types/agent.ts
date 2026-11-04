@@ -678,6 +678,11 @@ export interface AgentSkillSummary {
   scope?: SkillScope;
 	/** Older servers omit this field; consumers must treat that as enabled. */
 	enabled?: boolean;
+  /**
+   * Why the agent has this skill: granted by its role (always on), bound to the
+   * agent itself, or global. Older servers omit it.
+   */
+  source?: "role" | "agent" | "global";
 }
 
 /** Reusable role prompt. A global role is visible from every workspace. */

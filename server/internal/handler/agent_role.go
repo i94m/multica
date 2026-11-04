@@ -166,12 +166,11 @@ func (h *Handler) ListAgentRoles(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateAgentRole creates a workspace role, or a global role when scope is
-// "global". Both require workspace owner/admin.
+// "global". A workspace role requires workspace owner/admin; a global role is
+// instance-level and requires a platform admin, because it is visible in (and,
+// now that roles carry skills, can push content into) every workspace.
 func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if !h.roleAdmin(w, r, workspaceID) {
-		return
-	}
 	var req createAgentRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -188,6 +187,13 @@ func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope != "workspace" && scope != "global" {
 		writeError(w, http.StatusBadRequest, `scope must be "workspace" or "global"`)
+		return
+	}
+	if scope == "global" {
+		if !h.requirePlatformAdmin(w, r) {
+			return
+		}
+	} else if !h.roleAdmin(w, r, workspaceID) {
 		return
 	}
 	userID, ok := requireUserID(w, r)
@@ -227,11 +233,11 @@ func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 // next run of every linked agent picks up the new text.
 func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if !h.roleAdmin(w, r, workspaceID) {
-		return
-	}
 	role, ok := h.loadRoleVisible(w, r, workspaceID)
 	if !ok {
+		return
+	}
+	if !h.roleWriteAllowed(w, r, workspaceID, role) {
 		return
 	}
 	var req updateAgentRoleRequest
@@ -250,6 +256,11 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 	}
 	if scope != "workspace" && scope != "global" {
 		writeError(w, http.StatusBadRequest, `scope must be "workspace" or "global"`)
+		return
+	}
+	// Promoting a workspace role to global hands its content to every
+	// workspace, so it needs the same grant as editing a global role.
+	if scope == "global" && role.WorkspaceID.Valid && !h.requirePlatformAdmin(w, r) {
 		return
 	}
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
@@ -307,11 +318,11 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 // Agents themselves are untouched.
 func (h *Handler) DeleteAgentRole(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
-	if !h.roleAdmin(w, r, workspaceID) {
-		return
-	}
 	role, ok := h.loadRoleVisible(w, r, workspaceID)
 	if !ok {
+		return
+	}
+	if !h.roleWriteAllowed(w, r, workspaceID, role) {
 		return
 	}
 	tx, err := h.TxStarter.Begin(r.Context())
@@ -323,6 +334,11 @@ func (h *Handler) DeleteAgentRole(w http.ResponseWriter, r *http.Request) {
 	qtx := h.Queries.WithTx(tx)
 	if err := qtx.ClearAgentRoleReferences(r.Context(), role.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to detach role from agents")
+		return
+	}
+	// Role-granted skills have no foreign key to lean on.
+	if err := qtx.DeleteRoleSkillsByRole(r.Context(), role.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to remove role skills")
 		return
 	}
 	if err := qtx.DeleteAgentRole(r.Context(), role.ID); err != nil {

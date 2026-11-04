@@ -1086,7 +1086,13 @@
     "name_required": "名稱為必填",
     "cancel": "取消",
     "save": "儲存",
-    "saving": "儲存中…"
+    "saving": "儲存中…",
+    "skills_button": "技能",
+    "skills_dialog_title": "此角色下發的技能",
+    "skills_dialog_hint": "綁定此角色的所有智慧體都會自動取得這些技能，無法在單一智慧體上關閉。",
+    "skills_dialog_empty": "還沒有可用的技能。",
+    "skills_saved": "角色技能已儲存",
+    "skills_save_failed": "無法儲存角色技能"
   }
 
 }

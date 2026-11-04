@@ -1086,7 +1086,13 @@
     "name_required": "名前は必須です",
     "cancel": "キャンセル",
     "save": "保存",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "skills_button": "スキル",
+    "skills_dialog_title": "このロールが付与するスキル",
+    "skills_dialog_hint": "このロールに割り当てられたすべてのエージェントが自動的に取得します。エージェント単位では無効にできません。",
+    "skills_dialog_empty": "利用できるスキルはまだありません。",
+    "skills_saved": "ロールのスキルを保存しました",
+    "skills_save_failed": "ロールのスキルを保存できませんでした"
   }
 
 }

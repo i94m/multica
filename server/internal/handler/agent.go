@@ -2660,6 +2660,7 @@ func (h *Handler) attachAgentSkills(ctx context.Context, resp *AgentResponse, ag
 			Name:        s.Name,
 			Description: s.Description,
 			Enabled:     s.Enabled,
+			Source:      s.Source,
 		}
 	}
 	resp.Skills = out

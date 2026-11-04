@@ -92,6 +92,13 @@ type AgentRole struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
+type AgentRoleSkill struct {
+	RoleID    pgtype.UUID        `json:"role_id"`
+	SkillID   pgtype.UUID        `json:"skill_id"`
+	Position  int32              `json:"position"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type AgentRuntime struct {
 	ID                 pgtype.UUID        `json:"id"`
 	WorkspaceID        pgtype.UUID        `json:"workspace_id"`

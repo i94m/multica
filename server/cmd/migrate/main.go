@@ -143,6 +143,7 @@ var concurrentIndexCleanups = map[string]string{
 	"9996_agent_role_workspace_name_index":                      "idx_agent_role_workspace_name",
 	"9997_agent_role_global_name_index":                         "idx_agent_role_global_name",
 	"9999_skill_global_name_index":                              "idx_skill_global_name",
+	"999c_agent_role_skill_skill_index":                         "idx_agent_role_skill_skill",
 	"606_agent_task_queue_runtime_active_index":                 "idx_agent_task_queue_runtime_active",
 	"604_wecom_install_session_begin_rate_idx":                  "idx_wecom_install_session_begin_rate",
 	"603_wecom_install_session_agent_pending_idx":               "idx_wecom_install_session_agent_pending",

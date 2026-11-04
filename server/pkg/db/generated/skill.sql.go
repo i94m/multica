@@ -27,6 +27,23 @@ func (q *Queries) AddAgentSkill(ctx context.Context, arg AddAgentSkillParams) er
 	return err
 }
 
+const addRoleSkill = `-- name: AddRoleSkill :exec
+INSERT INTO agent_role_skill (role_id, skill_id, position)
+VALUES ($1, $2, $3)
+ON CONFLICT (role_id, skill_id) DO UPDATE SET position = EXCLUDED.position
+`
+
+type AddRoleSkillParams struct {
+	RoleID   pgtype.UUID `json:"role_id"`
+	SkillID  pgtype.UUID `json:"skill_id"`
+	Position int32       `json:"position"`
+}
+
+func (q *Queries) AddRoleSkill(ctx context.Context, arg AddRoleSkillParams) error {
+	_, err := q.db.Exec(ctx, addRoleSkill, arg.RoleID, arg.SkillID, arg.Position)
+	return err
+}
+
 const createSkill = `-- name: CreateSkill :one
 INSERT INTO skill (workspace_id, name, description, content, config, created_by)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -67,12 +84,61 @@ func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (Skill
 	return i, err
 }
 
+const deleteAgentSkillBindingsForRole = `-- name: DeleteAgentSkillBindingsForRole :exec
+DELETE FROM agent_skill ask
+USING agent a
+WHERE ask.agent_id = a.id
+  AND a.role_id = $1
+  AND ask.skill_id = ANY($2::uuid[])
+`
+
+type DeleteAgentSkillBindingsForRoleParams struct {
+	RoleID   pgtype.UUID   `json:"role_id"`
+	SkillIds []pgtype.UUID `json:"skill_ids"`
+}
+
+// When a skill joins a role, its existing per-agent bindings under that role
+// become dead weight (role skills cannot be disabled, so the row would read
+// "disabled" while the skill still applies). Drop them so the UI and the run
+// agree.
+func (q *Queries) DeleteAgentSkillBindingsForRole(ctx context.Context, arg DeleteAgentSkillBindingsForRoleParams) error {
+	_, err := q.db.Exec(ctx, deleteAgentSkillBindingsForRole, arg.RoleID, arg.SkillIds)
+	return err
+}
+
 const deleteGlobalSkill = `-- name: DeleteGlobalSkill :exec
 DELETE FROM skill WHERE id = $1 AND workspace_id IS NULL
 `
 
 func (q *Queries) DeleteGlobalSkill(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteGlobalSkill, id)
+	return err
+}
+
+const deleteRoleSkillsByRole = `-- name: DeleteRoleSkillsByRole :exec
+DELETE FROM agent_role_skill WHERE role_id = $1
+`
+
+func (q *Queries) DeleteRoleSkillsByRole(ctx context.Context, roleID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRoleSkillsByRole, roleID)
+	return err
+}
+
+const deleteRoleSkillsBySkill = `-- name: DeleteRoleSkillsBySkill :exec
+DELETE FROM agent_role_skill WHERE skill_id = $1
+`
+
+func (q *Queries) DeleteRoleSkillsBySkill(ctx context.Context, skillID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRoleSkillsBySkill, skillID)
+	return err
+}
+
+const deleteRoleSkillsBySkills = `-- name: DeleteRoleSkillsBySkills :exec
+DELETE FROM agent_role_skill WHERE skill_id = ANY($1::uuid[])
+`
+
+func (q *Queries) DeleteRoleSkillsBySkills(ctx context.Context, skillIds []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRoleSkillsBySkills, skillIds)
 	return err
 }
 
@@ -211,6 +277,47 @@ func (q *Queries) GetSkillVisibleInWorkspace(ctx context.Context, arg GetSkillVi
 	return i, err
 }
 
+const listAgentBoundSkills = `-- name: ListAgentBoundSkills :many
+SELECT s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id FROM skill s
+JOIN agent_skill ask ON ask.skill_id = s.id
+WHERE ask.agent_id = $1
+  AND ask.enabled = TRUE
+ORDER BY s.name ASC
+`
+
+// The agent layer only: rows the agent enabled for itself. Global skills are
+// NOT included here — they are their own (lowest) layer.
+func (q *Queries) ListAgentBoundSkills(ctx context.Context, agentID pgtype.UUID) ([]Skill, error) {
+	rows, err := q.db.Query(ctx, listAgentBoundSkills, agentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		var i Skill
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Content,
+			&i.Config,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PluginInstallationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAgentSkillNamesByAgentIDs = `-- name: ListAgentSkillNamesByAgentIDs :many
 SELECT agents.agent_id::uuid AS agent_id, s.name
 FROM unnest($1::uuid[]) AS agents(agent_id)
@@ -220,6 +327,11 @@ JOIN skill s ON s.workspace_id IS NULL
                  WHERE ask.agent_id = agents.agent_id
                    AND ask.skill_id = s.id
                    AND ask.enabled = TRUE
+             )
+             OR EXISTS (
+                 SELECT 1 FROM agent a
+                 JOIN agent_role_skill ars ON ars.role_id = a.role_id
+                 WHERE a.id = agents.agent_id AND ars.skill_id = s.id
              )
 ORDER BY agents.agent_id, s.name ASC
 `
@@ -253,10 +365,21 @@ func (q *Queries) ListAgentSkillNamesByAgentIDs(ctx context.Context, agentIds []
 
 const listAgentSkillSummaries = `-- name: ListAgentSkillSummaries :many
 SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at,
-       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+       CASE
+           WHEN s.workspace_id IS NULL THEN TRUE
+           WHEN ars.skill_id IS NOT NULL THEN TRUE
+           ELSE ask.enabled
+       END::boolean AS enabled,
+       CASE
+           WHEN ars.skill_id IS NOT NULL THEN 'role'
+           WHEN s.workspace_id IS NULL THEN 'global'
+           ELSE 'agent'
+       END::text AS source
 FROM skill s
 LEFT JOIN agent_skill ask ON ask.skill_id = s.id AND ask.agent_id = $1
-WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL
+LEFT JOIN agent a ON a.id = $1
+LEFT JOIN agent_role_skill ars ON ars.skill_id = s.id AND ars.role_id = a.role_id
+WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL OR ars.skill_id IS NOT NULL
 ORDER BY s.name ASC
 `
 
@@ -270,6 +393,7 @@ type ListAgentSkillSummariesRow struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	Enabled     bool               `json:"enabled"`
+	Source      string             `json:"source"`
 }
 
 // Summary variant for the agent skills list endpoint — omits `content` for
@@ -297,6 +421,7 @@ func (q *Queries) ListAgentSkillSummaries(ctx context.Context, agentID pgtype.UU
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Enabled,
+			&i.Source,
 		); err != nil {
 			return nil, err
 		}
@@ -367,6 +492,11 @@ WHERE s.id = ANY($2::uuid[])
             AND ask.skill_id = s.id
             AND ask.enabled = TRUE
       )
+      OR EXISTS (
+          SELECT 1 FROM agent a
+          JOIN agent_role_skill ars ON ars.role_id = a.role_id
+          WHERE a.id = $1 AND ars.skill_id = s.id
+      )
   )
 ORDER BY s.name ASC
 `
@@ -415,14 +545,23 @@ func (q *Queries) ListAgentSkillsByIDs(ctx context.Context, arg ListAgentSkillsB
 
 const listAgentSkillsByWorkspace = `-- name: ListAgentSkillsByWorkspace :many
 SELECT a.id AS agent_id, s.id, s.workspace_id, s.name, s.description,
-       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+       CASE
+           WHEN s.workspace_id IS NULL THEN TRUE
+           WHEN ars.skill_id IS NOT NULL THEN TRUE
+           ELSE ask.enabled
+       END::boolean AS enabled
 FROM agent a
 JOIN skill s ON s.workspace_id IS NULL
              OR EXISTS (
                  SELECT 1 FROM agent_skill bound
                  WHERE bound.agent_id = a.id AND bound.skill_id = s.id
              )
+             OR EXISTS (
+                 SELECT 1 FROM agent_role_skill ars
+                 WHERE ars.role_id = a.role_id AND ars.skill_id = s.id
+             )
 LEFT JOIN agent_skill ask ON ask.agent_id = a.id AND ask.skill_id = s.id
+LEFT JOIN agent_role_skill ars ON ars.role_id = a.role_id AND ars.skill_id = s.id
 WHERE a.workspace_id = $1
 ORDER BY s.name ASC
 `
@@ -438,7 +577,8 @@ type ListAgentSkillsByWorkspaceRow struct {
 
 // Batch agent-list read. Global skills apply to every agent in the workspace,
 // so they are emitted once per agent instead of only for agents that happen to
-// have a binding row. Workspace skills keep the binding-row behaviour.
+// have a binding row. Workspace skills keep the binding-row behaviour, and a
+// role's skills reach every agent bound to that role.
 func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListAgentSkillsByWorkspaceRow, error) {
 	rows, err := q.db.Query(ctx, listAgentSkillsByWorkspace, workspaceID)
 	if err != nil {
@@ -455,6 +595,128 @@ func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pg
 			&i.Name,
 			&i.Description,
 			&i.Enabled,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGlobalSkills = `-- name: ListGlobalSkills :many
+SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id FROM skill
+WHERE workspace_id IS NULL
+ORDER BY name ASC
+`
+
+func (q *Queries) ListGlobalSkills(ctx context.Context) ([]Skill, error) {
+	rows, err := q.db.Query(ctx, listGlobalSkills)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		var i Skill
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Content,
+			&i.Config,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PluginInstallationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoleSkills = `-- name: ListRoleSkills :many
+
+SELECT s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id FROM skill s
+JOIN agent_role_skill ars ON ars.skill_id = s.id
+WHERE ars.role_id = $1
+ORDER BY ars.position ASC, s.name ASC
+`
+
+// Role-skill junction
+//
+// A role is an agent's job definition; its skills are inherited by every agent
+// bound to that role and cannot be disabled per agent. See agent_role_skill.
+func (q *Queries) ListRoleSkills(ctx context.Context, roleID pgtype.UUID) ([]Skill, error) {
+	rows, err := q.db.Query(ctx, listRoleSkills, roleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		var i Skill
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Content,
+			&i.Config,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PluginInstallationID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoleSkillsByAgent = `-- name: ListRoleSkillsByAgent :many
+SELECT s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id FROM skill s
+JOIN agent_role_skill ars ON ars.skill_id = s.id
+JOIN agent a ON a.role_id = ars.role_id
+WHERE a.id = $1
+ORDER BY s.name ASC
+`
+
+// The role layer of an agent's effective skill set, resolved through
+// agent.role_id. Names are returned as-is; claim-time merging applies the
+// role > agent > global precedence and dedupes by name.
+func (q *Queries) ListRoleSkillsByAgent(ctx context.Context, id pgtype.UUID) ([]Skill, error) {
+	rows, err := q.db.Query(ctx, listRoleSkillsByAgent, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		var i Skill
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Content,
+			&i.Config,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PluginInstallationID,
 		); err != nil {
 			return nil, err
 		}

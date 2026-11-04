@@ -283,6 +283,9 @@ ws_labels AS MATERIALIZED (
 ws_skills AS MATERIALIZED (
     SELECT id FROM skill WHERE workspace_id = $1
 ),
+ws_agent_roles AS MATERIALIZED (
+    SELECT id FROM agent_role WHERE workspace_id = $1
+),
 ws_squads AS MATERIALIZED (
     SELECT id FROM squad WHERE workspace_id = $1
 ),
@@ -410,6 +413,11 @@ deleted_agent_skills AS (
     DELETE FROM agent_skill
     WHERE agent_id IN (SELECT id FROM ws_agents)
        OR skill_id IN (SELECT id FROM ws_skills)
+),
+deleted_agent_role_skills AS (
+    DELETE FROM agent_role_skill
+    WHERE skill_id IN (SELECT id FROM ws_skills)
+       OR role_id IN (SELECT id FROM ws_agent_roles)
 ),
 deleted_skill_files AS (
     DELETE FROM skill_file

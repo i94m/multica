@@ -1086,7 +1086,13 @@
     "name_required": "이름은 필수입니다",
     "cancel": "취소",
     "save": "저장",
-    "saving": "저장 중…"
+    "saving": "저장 중…",
+    "skills_button": "스킬",
+    "skills_dialog_title": "이 역할이 부여하는 스킬",
+    "skills_dialog_hint": "이 역할에 연결된 모든 에이전트가 자동으로 받습니다. 에이전트별로 끌 수 없습니다.",
+    "skills_dialog_empty": "사용할 수 있는 스킬이 없습니다.",
+    "skills_saved": "역할 스킬을 저장했습니다",
+    "skills_save_failed": "역할 스킬을 저장하지 못했습니다"
   }
 
 }

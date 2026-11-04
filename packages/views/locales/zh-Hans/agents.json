@@ -1086,7 +1086,13 @@
     "name_required": "名称为必填项",
     "cancel": "取消",
     "save": "保存",
-    "saving": "保存中…"
+    "saving": "保存中…",
+    "skills_button": "技能",
+    "skills_dialog_title": "此角色下发的技能",
+    "skills_dialog_hint": "绑定此角色的所有智能体都会自动获得这些技能，无法在单个智能体上关闭。",
+    "skills_dialog_empty": "还没有可用的技能。",
+    "skills_saved": "角色技能已保存",
+    "skills_save_failed": "无法保存角色技能"
   }
 
 }

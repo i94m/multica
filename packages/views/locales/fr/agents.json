@@ -1112,7 +1112,13 @@
     "name_required": "Le nom est obligatoire",
     "cancel": "Annuler",
     "save": "Enregistrer",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "skills_button": "Compétences",
+    "skills_dialog_title": "Compétences accordées par ce rôle",
+    "skills_dialog_hint": "Tous les agents liés à ce rôle les reçoivent automatiquement. Elles ne peuvent pas être désactivées par agent.",
+    "skills_dialog_empty": "Aucune compétence disponible.",
+    "skills_saved": "Compétences du rôle enregistrées",
+    "skills_save_failed": "Impossible d'enregistrer les compétences du rôle"
   }
 
 }

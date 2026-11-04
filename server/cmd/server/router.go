@@ -2348,6 +2348,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Route("/{id}", func(r chi.Router) {
 					r.Put("/", h.UpdateAgentRole)
 					r.Delete("/", h.DeleteAgentRole)
+					// Skills a role grants to every agent bound to it. Listing
+					// follows role visibility; writing is gated in the handler
+					// (workspace owner/admin, or platform admin for global roles).
+					r.Get("/skills", h.ListAgentRoleSkills)
+					r.Put("/skills", h.SetAgentRoleSkills)
 				})
 			})
 

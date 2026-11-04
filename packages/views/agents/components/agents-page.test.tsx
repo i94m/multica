@@ -413,7 +413,7 @@ describe("AgentsPage header", () => {
       within(header).getByRole("button", { name: "Display settings" }),
     ).toBeInTheDocument();
     fireEvent.click(within(header).getByRole("button", { name: "New agent" }));
-    expect(adapter.push).toHaveBeenCalledWith("/test-workspace/agents/new");
+    expect(adapter.push).toHaveBeenCalledWith("/test-workspace/agents/new/manual");
   });
 });
 

@@ -96,6 +96,10 @@ type AgentSkillSummary struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
+	// Source says why the agent has this skill: "role" (granted by the role it
+	// is bound to, always enabled), "agent" (bound to this agent), or "global".
+	// Empty on surfaces that do not resolve the layers.
+	Source string `json:"source,omitempty"`
 }
 
 type SkillFileResponse struct {
@@ -751,6 +755,12 @@ func (h *Handler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 	qtx := h.Queries.WithTx(tx)
 	if err := qtx.DeleteSkillLabelAssignmentsBySkill(r.Context(), skill.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove skill label assignments")
+		return
+	}
+	// A role that granted this skill loses it; every agent bound to that role
+	// simply stops receiving it on its next run (no per-agent rows to clean).
+	if err := qtx.DeleteRoleSkillsBySkill(r.Context(), skill.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to remove role bindings")
 		return
 	}
 	if skill.WorkspaceID.Valid {

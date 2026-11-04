@@ -246,6 +246,7 @@ import type {
   CreateCommentSubIssueManualRequest,
   CreateCommentSubIssueAgentRequest,
   CreateCommentSubIssueRequest,
+  AgentSkillSummary,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type {
@@ -3644,6 +3645,26 @@ export class ApiClient {
 
   async deleteAgentRole(id: string): Promise<void> {
     await this.fetch(`/api/agent-roles/${id}`, { method: "DELETE" });
+  }
+
+  /** Skills a role grants to every agent bound to it. */
+  async listAgentRoleSkills(roleId: string): Promise<AgentSkillSummary[]> {
+    const raw = await this.fetch<{ skills?: AgentSkillSummary[] }>(
+      `/api/agent-roles/${roleId}/skills`,
+    );
+    return raw.skills ?? [];
+  }
+
+  /** Replaces the role's whole skill set in one write. */
+  async setAgentRoleSkills(
+    roleId: string,
+    skillIds: string[],
+  ): Promise<AgentSkillSummary[]> {
+    const raw = await this.fetch<{ skills?: AgentSkillSummary[] }>(
+      `/api/agent-roles/${roleId}/skills`,
+      { method: "PUT", body: JSON.stringify({ skill_ids: skillIds }) },
+    );
+    return raw.skills ?? [];
   }
 
   async importSkill(data: { url: string }): Promise<Skill> {

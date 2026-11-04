@@ -80,7 +80,7 @@ func isAllowed(r *http.Request, queries *db.Queries, cfg Config, uid pgtype.UUID
 	if err != nil {
 		return false, err
 	}
-	if !cfg.allows(user.Email) {
+	if !cfg.Allows(user.Email) {
 		return false, nil
 	}
 

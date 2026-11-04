@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -7127,14 +7128,97 @@ func (s *TaskService) publishAgentStatus(agent db.Agent) {
 // starts on rules it is missing. Callers must settle the failure (preserve the
 // claim for redelivery, or 5xx the resolve) instead of dispatching that.
 func (s *TaskService) LoadAgentSkills(ctx context.Context, agentID pgtype.UUID) ([]AgentSkillData, error) {
-	skills, err := s.Queries.ListAgentSkills(ctx, agentID)
+	// Three layers, highest precedence first: the agent's role (a job
+	// definition the agent cannot opt out of), the skills the agent bound for
+	// itself, then the global skills every agent gets. They are separate reads
+	// because the merge needs to know where each skill came from — a single
+	// UNION would lose that, and the precedence rule is by layer.
+	roleSkills, err := s.Queries.ListRoleSkillsByAgent(ctx, agentID)
 	if err != nil {
-		return nil, fmt.Errorf("list agent skills: %w", err)
+		return nil, fmt.Errorf("list role skills: %w", err)
 	}
-	if len(skills) == 0 {
+	agentSkills, err := s.Queries.ListAgentBoundSkills(ctx, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("list agent-bound skills: %w", err)
+	}
+	globalSkills, err := s.Queries.ListGlobalSkills(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list global skills: %w", err)
+	}
+
+	merged, grants := mergeAgentSkillLayers(util.UUIDToString(agentID), []agentSkillLayer{
+		{source: AgentSkillGrantRole, skills: roleSkills},
+		{source: AgentSkillGrantAgent, skills: agentSkills},
+		{source: AgentSkillGrantGlobal, skills: globalSkills},
+	})
+	if len(merged) == 0 {
 		return nil, nil
 	}
-	return s.skillsWithFiles(ctx, skills)
+	return s.skillsWithFiles(ctx, merged, grants)
+}
+
+// Where an effective skill came from, for the merge below and for the agent
+// detail surface. These are NOT bundle sources: every database-backed skill is
+// still downloaded as a workspace bundle, whatever granted it.
+const (
+	AgentSkillGrantRole   = "role"
+	AgentSkillGrantAgent  = "agent"
+	AgentSkillGrantGlobal = "global"
+)
+
+type agentSkillLayer struct {
+	source string
+	skills []db.Skill
+}
+
+// mergeAgentSkillLayers flattens the layers into one effective set.
+//
+// Two dedupe rules, applied in layer order:
+//
+//   - Same skill id: the first layer that produced it wins. The skill is the
+//     same row either way, so this only decides which grant is reported.
+//   - Same name, different id: the first layer wins and the rest are dropped
+//     with a warning. Skills are materialized into a per-name directory in the
+//     execution environment, so two skills sharing a name would silently
+//     overwrite each other; precedence makes the outcome deterministic instead
+//     of depending on read order. A global "x" and a workspace "x" can both
+//     exist (their unique indexes are separate), so this is reachable without
+//     anyone doing something obviously wrong.
+//
+// The result is sorted by name so the bundle set — and therefore the hash the
+// daemon validates — does not depend on layer or row order.
+func mergeAgentSkillLayers(agentID string, layers []agentSkillLayer) ([]db.Skill, map[string]string) {
+	seenIDs := make(map[string]struct{})
+	byName := make(map[string]string) // lowercase name -> skill id that claimed it
+	grants := make(map[string]string)
+	merged := make([]db.Skill, 0)
+
+	for _, layer := range layers {
+		for _, skill := range layer.skills {
+			id := util.UUIDToString(skill.ID)
+			if _, ok := seenIDs[id]; ok {
+				continue
+			}
+			name := strings.ToLower(strings.TrimSpace(skill.Name))
+			if claimedBy, ok := byName[name]; ok {
+				slog.Warn("agent skills: dropping same-named skill from a lower-precedence layer",
+					"agent_id", agentID,
+					"name", skill.Name,
+					"dropped_id", id,
+					"dropped_grant", layer.source,
+					"kept_id", claimedBy,
+				)
+				continue
+			}
+			seenIDs[id] = struct{}{}
+			byName[name] = id
+			grants[id] = layer.source
+			merged = append(merged, skill)
+		}
+	}
+
+	sort.SliceStable(merged, func(i, j int) bool { return merged[i].Name < merged[j].Name })
+	return merged, grants
 }
 
 // skillsWithFiles loads the files of every given skill in ONE round trip
@@ -7142,7 +7226,7 @@ func (s *TaskService) LoadAgentSkills(ctx context.Context, agentID pgtype.UUID) 
 // skills were given. Shared by the claim-time full load and the resolve-time
 // scoped load so the two cannot drift on skill order, per-skill file order, or
 // the nil (not empty) file list of a skill that has none.
-func (s *TaskService) skillsWithFiles(ctx context.Context, skills []db.Skill) ([]AgentSkillData, error) {
+func (s *TaskService) skillsWithFiles(ctx context.Context, skills []db.Skill, grants map[string]string) ([]AgentSkillData, error) {
 	skillIDs := make([]pgtype.UUID, len(skills))
 	for i, sk := range skills {
 		skillIDs[i] = sk.ID
@@ -7161,12 +7245,14 @@ func (s *TaskService) skillsWithFiles(ctx context.Context, skills []db.Skill) ([
 
 	result := make([]AgentSkillData, 0, len(skills))
 	for _, sk := range skills {
+		id := util.UUIDToString(sk.ID)
 		result = append(result, AgentSkillData{
-			ID:          util.UUIDToString(sk.ID),
+			ID:          id,
 			Name:        sk.Name,
 			Description: sk.Description,
 			Content:     sk.Content,
-			Files:       filesBySkill[util.UUIDToString(sk.ID)],
+			Files:       filesBySkill[id],
+			GrantSource: grants[id],
 		})
 	}
 	return result, nil
@@ -7255,7 +7341,7 @@ func (s *TaskService) LoadRequestedAgentSkillBundles(ctx context.Context, agentI
 			// Same fail-closed rule as LoadAgentSkills: a failed file read
 			// would produce a bundle that hashes and validates like a complete
 			// one, so it must never be served.
-			loaded, err := s.skillsWithFiles(ctx, skills)
+			loaded, err := s.skillsWithFiles(ctx, skills, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -7348,8 +7434,12 @@ func BuildAgentSkillBundles(skills []AgentSkillData) ([]AgentSkillData, []AgentS
 
 // AgentSkillData represents a skill for task execution responses.
 type AgentSkillData struct {
-	ID          string               `json:"id"`
+	ID string `json:"id"`
+	// Source is the BUNDLE source the daemon downloads by (workspace/builtin).
+	// GrantSource is why the skill is in the set (role/agent/global) and never
+	// travels as a bundle source.
 	Source      string               `json:"source,omitempty"`
+	GrantSource string               `json:"grant_source,omitempty"`
 	Name        string               `json:"name"`
 	Description string               `json:"description,omitempty"`
 	Hash        string               `json:"hash,omitempty"`

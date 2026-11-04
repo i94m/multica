@@ -39,9 +39,10 @@ import {
   SelectValue,
 } from "@multica/ui/components/ui/select";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { CircleUser, Globe, Pencil, Plus, Trash2 } from "@multica/ui/icons";
+import { CircleUser, Globe, Pencil, Plus, Sparkles, Trash2 } from "@multica/ui/icons";
 import { toast } from "sonner";
 import { useT } from "../../i18n";
+import { RoleSkillsDialog } from "./role-skills-dialog";
 import {
   CollectionPageHeader,
   CollectionPageState,
@@ -81,6 +82,7 @@ export function RolesPage() {
   const [editing, setEditing] = useState<AgentRole | null>(null);
   const [draft, setDraft] = useState<RoleDraft>(EMPTY_DRAFT);
   const [pendingDelete, setPendingDelete] = useState<AgentRole | null>(null);
+  const [skillsRole, setSkillsRole] = useState<AgentRole | null>(null);
 
   const openCreate = () => {
     setEditing(null);
@@ -194,12 +196,24 @@ export function RolesPage() {
                   isAdmin={isAdmin}
                   onEdit={() => openEdit(role)}
                   onDelete={() => setPendingDelete(role)}
+                  onEditSkills={() => setSkillsRole(role)}
                 />
               ))}
             </ul>
           )}
         </div>
       </div>
+
+      {skillsRole ? (
+        <RoleSkillsDialog
+          role={skillsRole}
+          canEdit={isAdmin}
+          open
+          onOpenChange={(next) => {
+            if (!next) setSkillsRole(null);
+          }}
+        />
+      ) : null}
 
       <Dialog
         open={dialogOpen}
@@ -359,11 +373,13 @@ function RoleRow({
   isAdmin,
   onEdit,
   onDelete,
+  onEditSkills,
 }: {
   role: AgentRole;
   isAdmin: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onEditSkills: () => void;
 }) {
   const { t } = useT("agents");
   return (
@@ -393,8 +409,19 @@ function RoleRow({
         <span className="text-caption text-muted-foreground">
           {t(($) => $.roles.agent_count, { count: role.agent_count })}
         </span>
-        {isAdmin ? (
-          <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            className="text-muted-foreground"
+            onClick={onEditSkills}
+          >
+            <Sparkles className="size-3" />
+            {t(($) => $.roles.skills_button)}
+          </Button>
+          {isAdmin ? (
+          <>
             <Button type="button" size="xs" variant="outline" onClick={onEdit}>
               <Pencil className="size-3" />
               {t(($) => $.roles.edit)}
@@ -409,8 +436,9 @@ function RoleRow({
             >
               <Trash2 className="size-3" />
             </Button>
-          </div>
-        ) : null}
+          </>
+          ) : null}
+        </div>
       </div>
     </li>
   );

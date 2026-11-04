@@ -171,6 +171,11 @@ WHERE s.id = ANY(sqlc.arg('skill_ids')::uuid[])
             AND ask.skill_id = s.id
             AND ask.enabled = TRUE
       )
+      OR EXISTS (
+          SELECT 1 FROM agent a
+          JOIN agent_role_skill ars ON ars.role_id = a.role_id
+          WHERE a.id = $1 AND ars.skill_id = s.id
+      )
   )
 ORDER BY s.name ASC;
 
@@ -182,10 +187,21 @@ ORDER BY s.name ASC;
 -- are applied automatically and cannot be disabled per agent. Workspace
 -- skills appear only with a binding row and keep that row's enabled state.
 SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at,
-       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+       CASE
+           WHEN s.workspace_id IS NULL THEN TRUE
+           WHEN ars.skill_id IS NOT NULL THEN TRUE
+           ELSE ask.enabled
+       END::boolean AS enabled,
+       CASE
+           WHEN ars.skill_id IS NOT NULL THEN 'role'
+           WHEN s.workspace_id IS NULL THEN 'global'
+           ELSE 'agent'
+       END::text AS source
 FROM skill s
 LEFT JOIN agent_skill ask ON ask.skill_id = s.id AND ask.agent_id = $1
-WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL
+LEFT JOIN agent a ON a.id = $1
+LEFT JOIN agent_role_skill ars ON ars.skill_id = s.id AND ars.role_id = a.role_id
+WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL OR ars.skill_id IS NOT NULL
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillNamesByAgentIDs :many
@@ -199,6 +215,11 @@ JOIN skill s ON s.workspace_id IS NULL
                  WHERE ask.agent_id = agents.agent_id
                    AND ask.skill_id = s.id
                    AND ask.enabled = TRUE
+             )
+             OR EXISTS (
+                 SELECT 1 FROM agent a
+                 JOIN agent_role_skill ars ON ars.role_id = a.role_id
+                 WHERE a.id = agents.agent_id AND ars.skill_id = s.id
              )
 ORDER BY agents.agent_id, s.name ASC;
 
@@ -219,18 +240,88 @@ WHERE agent_id = $1 AND skill_id = $2;
 -- name: RemoveAllAgentSkills :exec
 DELETE FROM agent_skill WHERE agent_id = $1;
 
+-- Role-skill junction
+--
+-- A role is an agent's job definition; its skills are inherited by every agent
+-- bound to that role and cannot be disabled per agent. See agent_role_skill.
+
+-- name: ListRoleSkills :many
+SELECT s.* FROM skill s
+JOIN agent_role_skill ars ON ars.skill_id = s.id
+WHERE ars.role_id = $1
+ORDER BY ars.position ASC, s.name ASC;
+
+-- name: ListRoleSkillsByAgent :many
+-- The role layer of an agent's effective skill set, resolved through
+-- agent.role_id. Names are returned as-is; claim-time merging applies the
+-- role > agent > global precedence and dedupes by name.
+SELECT s.* FROM skill s
+JOIN agent_role_skill ars ON ars.skill_id = s.id
+JOIN agent a ON a.role_id = ars.role_id
+WHERE a.id = $1
+ORDER BY s.name ASC;
+
+-- name: ListAgentBoundSkills :many
+-- The agent layer only: rows the agent enabled for itself. Global skills are
+-- NOT included here — they are their own (lowest) layer.
+SELECT s.* FROM skill s
+JOIN agent_skill ask ON ask.skill_id = s.id
+WHERE ask.agent_id = $1
+  AND ask.enabled = TRUE
+ORDER BY s.name ASC;
+
+-- name: ListGlobalSkills :many
+SELECT * FROM skill
+WHERE workspace_id IS NULL
+ORDER BY name ASC;
+
+-- name: AddRoleSkill :exec
+INSERT INTO agent_role_skill (role_id, skill_id, position)
+VALUES ($1, $2, $3)
+ON CONFLICT (role_id, skill_id) DO UPDATE SET position = EXCLUDED.position;
+
+-- name: DeleteRoleSkillsByRole :exec
+DELETE FROM agent_role_skill WHERE role_id = $1;
+
+-- name: DeleteRoleSkillsBySkill :exec
+DELETE FROM agent_role_skill WHERE skill_id = $1;
+
+-- name: DeleteRoleSkillsBySkills :exec
+DELETE FROM agent_role_skill WHERE skill_id = ANY(sqlc.arg('skill_ids')::uuid[]);
+
+-- name: DeleteAgentSkillBindingsForRole :exec
+-- When a skill joins a role, its existing per-agent bindings under that role
+-- become dead weight (role skills cannot be disabled, so the row would read
+-- "disabled" while the skill still applies). Drop them so the UI and the run
+-- agree.
+DELETE FROM agent_skill ask
+USING agent a
+WHERE ask.agent_id = a.id
+  AND a.role_id = $1
+  AND ask.skill_id = ANY(sqlc.arg('skill_ids')::uuid[]);
+
 -- name: ListAgentSkillsByWorkspace :many
 -- Batch agent-list read. Global skills apply to every agent in the workspace,
 -- so they are emitted once per agent instead of only for agents that happen to
--- have a binding row. Workspace skills keep the binding-row behaviour.
+-- have a binding row. Workspace skills keep the binding-row behaviour, and a
+-- role's skills reach every agent bound to that role.
 SELECT a.id AS agent_id, s.id, s.workspace_id, s.name, s.description,
-       CASE WHEN s.workspace_id IS NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
+       CASE
+           WHEN s.workspace_id IS NULL THEN TRUE
+           WHEN ars.skill_id IS NOT NULL THEN TRUE
+           ELSE ask.enabled
+       END::boolean AS enabled
 FROM agent a
 JOIN skill s ON s.workspace_id IS NULL
              OR EXISTS (
                  SELECT 1 FROM agent_skill bound
                  WHERE bound.agent_id = a.id AND bound.skill_id = s.id
              )
+             OR EXISTS (
+                 SELECT 1 FROM agent_role_skill ars
+                 WHERE ars.role_id = a.role_id AND ars.skill_id = s.id
+             )
 LEFT JOIN agent_skill ask ON ask.agent_id = a.id AND ask.skill_id = s.id
+LEFT JOIN agent_role_skill ars ON ars.role_id = a.role_id AND ars.skill_id = s.id
 WHERE a.workspace_id = $1
 ORDER BY s.name ASC;

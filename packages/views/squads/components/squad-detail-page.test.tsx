@@ -51,6 +51,7 @@ vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({
     squads: () => "/acme/squads",
     newAgent: () => "/acme/agents/new",
+    newAgentManual: () => "/acme/agents/new/manual",
     agentDetail: (id: string) => `/acme/agents/${id}`,
     issueDetail: (id: string) => `/acme/issues/${id}`,
   }),

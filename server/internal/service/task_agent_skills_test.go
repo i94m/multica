@@ -71,7 +71,11 @@ func (r *sliceRows) Scan(dest ...any) error {
 // chosen query. perSkillFileCalls counts the pre-batch ListSkillFiles query so
 // a test can prove the N+1 loop is gone rather than just assuming it.
 type skillReadDBTX struct {
+	// skills is the agent-bound layer. roleSkills / globalSkills default to
+	// empty so a test that only cares about one layer can ignore the others.
 	skills           [][]any
+	roleSkills       [][]any
+	globalSkills     [][]any
 	files            [][]any
 	failQuery        string
 	perSkillFileCall int
@@ -95,11 +99,21 @@ func (d *skillReadDBTX) Query(_ context.Context, sql string, _ ...any) (pgx.Rows
 	case strings.Contains(sql, "ListSkillFiles"):
 		d.perSkillFileCall++
 		return &sliceRows{}, nil
-	case strings.Contains(sql, "ListAgentSkills"):
-		if d.failQuery == "ListAgentSkills" {
+	case strings.Contains(sql, "ListRoleSkillsByAgent"):
+		if d.failQuery == "ListRoleSkillsByAgent" {
+			return nil, errInjectedSkillRead
+		}
+		return &sliceRows{rows: d.roleSkills}, nil
+	case strings.Contains(sql, "ListAgentBoundSkills"):
+		if d.failQuery == "ListAgentBoundSkills" {
 			return nil, errInjectedSkillRead
 		}
 		return &sliceRows{rows: d.skills}, nil
+	case strings.Contains(sql, "ListGlobalSkills"):
+		if d.failQuery == "ListGlobalSkills" {
+			return nil, errInjectedSkillRead
+		}
+		return &sliceRows{rows: d.globalSkills}, nil
 	}
 	return nil, fmt.Errorf("unexpected query: %s", sql)
 }
@@ -194,7 +208,7 @@ func TestLoadAgentSkills_ReportsReadFailures(t *testing.T) {
 		failQuery string
 	}{
 		{name: "batch file query fails", failQuery: "ListSkillFilesBySkillIDs"},
-		{name: "agent skill query fails", failQuery: "ListAgentSkills"},
+		{name: "agent skill query fails", failQuery: "ListAgentBoundSkills"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
