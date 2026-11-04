@@ -810,8 +810,8 @@
       "add_dialog_confirm_other": "Add {{count}} skills",
       "add_dialog_cancel": "Cancel",
       "add_failed_toast": "Failed to add skill",
-      "role_badge": "From role",
-      "role_hint": "Granted by this agent's role. Change the role in the platform console to change this set."
+      "role_badge": "Built into role",
+      "role_hint": "Built into this agent's role. Change the role in the platform console to change this set."
     },
     "integrations": {
       "members_note": "Only workspace owners and admins can manage this connection. You can view connected bots in Settings → Integrations."

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Loader2,
   Plus,
@@ -146,6 +146,14 @@ export function SkillsTab({
 
   const runtimeSkills = runtimeQuery.data?.skills ?? [];
 
+  // Role-granted skills are global skills, and they read as the agent's built-in
+  // kit: list them before the ones the agent picked up on its own.
+  const orderedSkills = useMemo(() => {
+    const rank = (skill: (typeof agent.skills)[number]) =>
+      skill.scope === "global" ? 0 : 1;
+    return [...agent.skills].sort((a, b) => rank(a) - rank(b));
+  }, [agent.skills]);
+
   return (
     <div className="space-y-8">
 
@@ -173,7 +181,7 @@ export function SkillsTab({
           />
         ) : (
           <ul className="divide-y rounded-lg border bg-surface-raised/40">
-            {agent.skills.map((skill) => {
+            {orderedSkills.map((skill) => {
               const enabled = skill.enabled !== false;
               const isGlobal = skill.scope === "global";
               // Granted by the agent's role: mandatory, and maintained with the
@@ -209,7 +217,7 @@ export function SkillsTab({
                             {t(($) => $.tab_body.skills.role_badge)}
                           </Badge>
                         )}
-                        {isGlobal && (
+                        {isGlobal && !isRole && (
                           <Badge
                             variant="outline"
                             className="shrink-0"

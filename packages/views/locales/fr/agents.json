@@ -810,8 +810,8 @@
       "add_dialog_confirm_other": "Ajouter {{count}} skills",
       "add_dialog_cancel": "Annuler",
       "add_failed_toast": "Échec de l'ajout du skill",
-      "role_badge": "Du rôle",
-      "role_hint": "Accordées par le rôle de cet agent. Modifiez le rôle dans la console d'administration."
+      "role_badge": "Intégré au rôle",
+      "role_hint": "Intégré au rôle de cet agent. Modifiez le rôle dans la console d'administration."
     },
     "integrations": {
       "members_note": "Seuls les propriétaires et administrateurs de l'espace de travail peuvent gérer cette connexion. Vous pouvez voir les bots connectés dans Paramètres → Intégrations."

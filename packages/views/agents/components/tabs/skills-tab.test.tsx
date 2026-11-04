@@ -219,6 +219,36 @@ describe("SkillsTab", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("lists role-granted skills first and marks them as built into the role", async () => {
+    renderSkillsTab({
+      skills: [
+        {
+          id: "skill-agent",
+          name: "Agent extra",
+          description: "Bound to this agent",
+          enabled: true,
+        },
+        {
+          id: "skill-role",
+          name: "Role baseline",
+          description: "Granted by the role",
+          scope: "global",
+          source: "role",
+          enabled: true,
+        },
+      ],
+    });
+
+    await screen.findByText("Role baseline");
+    expect(screen.getByText("Built into role")).toBeInTheDocument();
+    // Role skills are global rows, but only the role badge is shown for them.
+    expect(screen.queryByText("Global")).not.toBeInTheDocument();
+
+    const rows = screen.getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent("Role baseline");
+    expect(rows[1]).toHaveTextContent("Agent extra");
+  });
+
   it("shows inherited skills discovered from the assigned runtime", async () => {
     mockRuntimeCapabilities.mockResolvedValue({
       skills: [
