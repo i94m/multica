@@ -77,7 +77,9 @@
     "model": "モデル",
     "created": "作成日時",
     "owner": "オーナー",
-    "access": "アクセス"
+    "access": "アクセス",
+    "role": "ロール",
+    "no_role": "未設定"
   },
   "row": {
     "you": "あなた",
@@ -628,7 +630,9 @@
       "add_dialog_confirm_default": "追加",
       "add_dialog_confirm_other": "スキル {{count}} 件を追加",
       "add_dialog_cancel": "キャンセル",
-      "add_failed_toast": "スキルを追加できませんでした"
+      "add_failed_toast": "スキルを追加できませんでした",
+      "role_badge": "ロール由来",
+      "role_hint": "このエージェントのロールが付与しています。変更するにはプラットフォーム管理画面でロールを編集してください。"
     },
     "integrations": {
       "members_note": "この接続を管理できるのはワークスペースのオーナーと管理者のみです。接続済みの Bot は「設定 → 連携」で確認できます。"
@@ -1050,7 +1054,10 @@
     "hint": "ロールを選択すると、毎回そのロールの指示が自動で読み込まれます。",
     "none": "ロールなし",
     "view_instructions": "ロールの指示を表示",
-    "no_instructions": "このロールには指示がありません。"
+    "no_instructions": "このロールには指示がありません。",
+    "skills_label": "このロールが付与するスキル",
+    "skills_empty": "このロールにはスキルが設定されていません。",
+    "supplement_hint": "ここのプロンプトはロールのプロンプトの後に追加されます。このエージェント固有の補足に使ってください。"
   },
   "roles": {
     "title": "ロール",
@@ -1094,5 +1101,4 @@
     "skills_saved": "ロールのスキルを保存しました",
     "skills_save_failed": "ロールのスキルを保存できませんでした"
   }
-
 }

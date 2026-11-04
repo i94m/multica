@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save } from "@multica/ui/icons";
+import { useQuery } from "@tanstack/react-query";
+import { agentRoleSkillsOptions } from "@multica/core/agents";
+import { useWorkspaceId } from "@multica/core/hooks";
 import type { Agent } from "@multica/core/types";
+import { Badge } from "@multica/ui/components/ui/badge";
 import { Button } from "@multica/ui/components/ui/button";
 import { Textarea } from "@multica/ui/components/ui/textarea";
 import { ReadonlyContent } from "../../../editor/readonly-content";
@@ -146,7 +150,16 @@ export function InstructionsTab({
             value={roleId}
             onChange={(next) => setRoleId(next ?? "")}
           />
+          {roleId ? (
+            <RoleSkillsPreview roleId={roleId} />
+          ) : null}
         </div>
+      ) : null}
+
+      {!hasSystemLayer && roleId ? (
+        <p className="max-w-2xl text-pretty text-caption leading-5 text-muted-foreground">
+          {t(($) => $.role_select.supplement_hint)}
+        </p>
       ) : null}
 
       {/* No overflow clipping on the card: the footer is sticky inside the
@@ -237,6 +250,35 @@ export function InstructionsTab({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// The skills a role grants. Read-only here: the set is maintained with the
+// role in the platform console, and every agent bound to the role inherits it.
+function RoleSkillsPreview({ roleId }: { roleId: string }) {
+  const { t } = useT("agents");
+  const wsId = useWorkspaceId();
+  const { data: skills = [] } = useQuery(agentRoleSkillsOptions(wsId, roleId));
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <span className="text-caption font-medium text-muted-foreground">
+        {t(($) => $.role_select.skills_label)}
+      </span>
+      {skills.length === 0 ? (
+        <p className="text-caption text-muted-foreground">
+          {t(($) => $.role_select.skills_empty)}
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {skills.map((skill) => (
+            <Badge key={skill.id} variant="outline" className="max-w-full">
+              <span className="truncate">{skill.name}</span>
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

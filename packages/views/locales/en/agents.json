@@ -87,7 +87,9 @@
     "model": "Model",
     "created": "Created",
     "owner": "Owner",
-    "access": "Access"
+    "access": "Access",
+    "role": "Role",
+    "no_role": "No role"
   },
   "row": {
     "you": "You",
@@ -806,7 +808,9 @@
       "add_dialog_confirm_one": "Add {{count}} skill",
       "add_dialog_confirm_other": "Add {{count}} skills",
       "add_dialog_cancel": "Cancel",
-      "add_failed_toast": "Failed to add skill"
+      "add_failed_toast": "Failed to add skill",
+      "role_badge": "From role",
+      "role_hint": "Granted by this agent's role. Change the role in the platform console to change this set."
     },
     "integrations": {
       "members_note": "Only workspace owners and admins can manage this connection. You can view connected bots in Settings → Integrations."
@@ -1076,7 +1080,10 @@
     "hint": "Selecting a role loads its prompt automatically on every run.",
     "none": "No role",
     "view_instructions": "View role instructions",
-    "no_instructions": "This role has no instructions."
+    "no_instructions": "This role has no instructions.",
+    "skills_label": "Skills from this role",
+    "skills_empty": "This role grants no skills.",
+    "supplement_hint": "Your prompt is appended after the role prompt — use it for this agent's specifics."
   },
   "roles": {
     "title": "Roles",
@@ -1120,5 +1127,4 @@
     "skills_saved": "Role skills saved",
     "skills_save_failed": "Could not save role skills"
   }
-
 }

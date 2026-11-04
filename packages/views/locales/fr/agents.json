@@ -87,7 +87,9 @@
     "model": "Modèle",
     "created": "Création",
     "owner": "Propriétaire",
-    "access": "Accès"
+    "access": "Accès",
+    "role": "Rôle",
+    "no_role": "Aucun rôle"
   },
   "row": {
     "you": "Vous",
@@ -806,7 +808,9 @@
       "add_dialog_confirm_one": "Ajouter {{count}} skill",
       "add_dialog_confirm_other": "Ajouter {{count}} skills",
       "add_dialog_cancel": "Annuler",
-      "add_failed_toast": "Échec de l'ajout du skill"
+      "add_failed_toast": "Échec de l'ajout du skill",
+      "role_badge": "Du rôle",
+      "role_hint": "Accordées par le rôle de cet agent. Modifiez le rôle dans la console d'administration."
     },
     "integrations": {
       "members_note": "Seuls les propriétaires et administrateurs de l'espace de travail peuvent gérer cette connexion. Vous pouvez voir les bots connectés dans Paramètres → Intégrations."
@@ -1076,7 +1080,10 @@
     "hint": "La sélection d’un rôle charge automatiquement son prompt à chaque exécution.",
     "none": "Aucun rôle",
     "view_instructions": "Voir les instructions du rôle",
-    "no_instructions": "Ce rôle n’a pas d’instructions."
+    "no_instructions": "Ce rôle n’a pas d’instructions.",
+    "skills_label": "Compétences accordées par ce rôle",
+    "skills_empty": "Ce rôle n'accorde aucune compétence.",
+    "supplement_hint": "Votre prompt est ajouté après celui du rôle — utilisez-le pour les spécificités de cet agent."
   },
   "roles": {
     "title": "Rôles",
@@ -1120,5 +1127,4 @@
     "skills_saved": "Compétences du rôle enregistrées",
     "skills_save_failed": "Impossible d'enregistrer les compétences du rôle"
   }
-
 }

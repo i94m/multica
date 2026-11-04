@@ -42,7 +42,7 @@ describe("admin role writes", () => {
 
     await rolesApi.setSkills("role-1", ["skill-1"]);
 
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0]![1]!.headers as Record<string, string>;
     expect(headers["X-CSRF-Token"]).toBe("session-value");
   });
 
@@ -60,7 +60,7 @@ describe("admin role writes", () => {
     await rolesApi.setSkills("role-1", []);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    const retryHeaders = fetchMock.mock.calls[1][1].headers as Record<string, string>;
+    const retryHeaders = fetchMock.mock.calls[1]![1]!.headers as Record<string, string>;
     expect(retryHeaders["X-CSRF-Token"]).toBe("token-value");
   });
 
@@ -71,7 +71,7 @@ describe("admin role writes", () => {
 
     await rolesApi.list();
 
-    const headers = fetchMock.mock.calls[0][1].headers as Record<string, string>;
+    const headers = fetchMock.mock.calls[0]![1]!.headers as Record<string, string>;
     expect(headers["X-CSRF-Token"]).toBeUndefined();
   });
 });

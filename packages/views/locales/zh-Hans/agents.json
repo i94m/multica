@@ -85,7 +85,9 @@
     "model": "模型",
     "created": "创建时间",
     "owner": "owner",
-    "access": "访问权限"
+    "access": "访问权限",
+    "role": "角色",
+    "no_role": "未设置角色"
   },
   "row": {
     "you": "你",
@@ -786,7 +788,9 @@
       "add_dialog_confirm_default": "添加",
       "add_dialog_confirm_other": "添加 {{count}} 个 skill",
       "add_dialog_cancel": "取消",
-      "add_failed_toast": "添加 skill 失败"
+      "add_failed_toast": "添加 skill 失败",
+      "role_badge": "来自角色",
+      "role_hint": "由该智能体绑定的角色下发。要调整这组技能，请在平台管理后台修改角色。"
     },
     "integrations": {
       "members_note": "只有工作区的所有者和管理员可以管理此连接。你可以在\"设置 → 集成\"中查看已连接的 Bot。"
@@ -1050,7 +1054,10 @@
     "hint": "选择角色后，每次运行会自动加载该角色对应的提示词。",
     "none": "不使用角色",
     "view_instructions": "查看角色提示词",
-    "no_instructions": "该角色没有提示词。"
+    "no_instructions": "该角色没有提示词。",
+    "skills_label": "此角色赋予的技能",
+    "skills_empty": "此角色没有配置技能。",
+    "supplement_hint": "这里的提示词会追加在角色提示词之后，用于补充说明这个智能体的特殊要求。"
   },
   "roles": {
     "title": "角色",
@@ -1094,5 +1101,4 @@
     "skills_saved": "角色技能已保存",
     "skills_save_failed": "无法保存角色技能"
   }
-
 }

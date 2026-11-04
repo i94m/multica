@@ -65,6 +65,7 @@ export const EMPTY_AGENT_FILTERS: AgentListFilters = {
 // User-hideable columns. Name and the structural columns (checkbox, kebab)
 // are always visible.
 export type AgentColumnKey =
+  | "role"
   | "status"
   | "owner"
   | "access"

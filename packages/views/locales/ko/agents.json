@@ -85,7 +85,9 @@
     "model": "모델",
     "created": "생성일",
     "owner": "소유자",
-    "access": "접근 권한"
+    "access": "접근 권한",
+    "role": "역할",
+    "no_role": "역할 없음"
   },
   "row": {
     "you": "나",
@@ -636,7 +638,9 @@
       "add_dialog_confirm_default": "추가",
       "add_dialog_confirm_other": "스킬 {{count}}개 추가",
       "add_dialog_cancel": "취소",
-      "add_failed_toast": "스킬을 추가하지 못했습니다"
+      "add_failed_toast": "스킬을 추가하지 못했습니다",
+      "role_badge": "역할 제공",
+      "role_hint": "이 에이전트의 역할이 부여합니다. 변경하려면 플랫폼 관리 콘솔에서 역할을 수정하세요."
     },
     "integrations": {
       "members_note": "이 연결을 관리할 수 있는 사람은 워크스페이스 소유자와 관리자뿐입니다. 연결된 봇은 설정 → 연동에서 확인할 수 있습니다."
@@ -1050,7 +1054,10 @@
     "hint": "역할을 선택하면 매 실행 시 해당 역할의 지침이 자동으로 로드됩니다.",
     "none": "역할 없음",
     "view_instructions": "역할 지침 보기",
-    "no_instructions": "이 역할에는 지침이 없습니다."
+    "no_instructions": "이 역할에는 지침이 없습니다.",
+    "skills_label": "이 역할이 부여하는 스킬",
+    "skills_empty": "이 역할에는 스킬이 없습니다.",
+    "supplement_hint": "여기의 프롬프트는 역할 프롬프트 뒤에 추가됩니다. 이 에이전트만의 보충 설명에 사용하세요."
   },
   "roles": {
     "title": "역할",
@@ -1094,5 +1101,4 @@
     "skills_saved": "역할 스킬을 저장했습니다",
     "skills_save_failed": "역할 스킬을 저장하지 못했습니다"
   }
-
 }

@@ -34,6 +34,7 @@ import {
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useWorkspacePaths } from "@multica/core/paths";
+import { agentRoleListOptions } from "@multica/core/agents";
 import {
   agentListOptions,
   memberListOptions,
@@ -249,6 +250,22 @@ function EmptyState({
 }
 
 // Cells
+
+function RoleCell({ name }: { name: string | undefined }) {
+  const { t } = useT("agents");
+  if (!name) {
+    return (
+      <span className="text-muted-foreground">
+        {t(($) => $.columns.no_role)}
+      </span>
+    );
+  }
+  return (
+    <TruncatedTooltip content={name}>
+      <span className="min-w-0 truncate">{name}</span>
+    </TruncatedTooltip>
+  );
+}
 
 function NameCell({ row }: { row: AgentListRow }) {
   const { t } = useT("agents");
@@ -591,6 +608,13 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
 
   const selectedRows = rows.filter((row) => selectedIds.has(row.agent.id));
 
+  // Role names for the list: the agent payload carries role_id only.
+  const { data: roles = [] } = useQuery(agentRoleListOptions(wsId));
+  const roleNameById = useMemo(
+    () => new Map(roles.map((role) => [role.id, role.name])),
+    [roles],
+  );
+
   const columns = useMemo<CollectionColumn<AgentListRow>[]>(
     () => [
       {
@@ -598,6 +622,17 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
         header: t(($) => $.columns.agent),
         sortKey: "name",
         cell: (row) => <NameCell row={row} />,
+      },
+      {
+        key: "role",
+        header: t(($) => $.columns.role),
+        width: 152,
+        hideable: true,
+        cell: (row) => (
+          <RoleCell
+            name={row.agent.role_id ? roleNameById.get(row.agent.role_id) : undefined}
+          />
+        ),
       },
       {
         key: "status",
@@ -671,7 +706,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
         ),
       },
     ],
-    [t, locale],
+    [t, locale, roleNameById],
   );
 
   const sort: CollectionSort = {

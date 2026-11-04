@@ -176,6 +176,9 @@ export function SkillsTab({
             {agent.skills.map((skill) => {
               const enabled = skill.enabled !== false;
               const isGlobal = skill.scope === "global";
+              // Granted by the agent's role: mandatory, and maintained with the
+              // role rather than here.
+              const isRole = skill.source === "role";
               const busy = busyId === skill.id;
               return (
                 <li key={skill.id} className="flex items-center gap-3 p-3">
@@ -197,6 +200,15 @@ export function SkillsTab({
                         <span className={cn("truncate text-body font-medium", !enabled && "text-muted-foreground")}>
                           {skill.name}
                         </span>
+                        {isRole && (
+                          <Badge
+                            variant="outline"
+                            className="shrink-0"
+                            title={t(($) => $.tab_body.skills.role_hint)}
+                          >
+                            {t(($) => $.tab_body.skills.role_badge)}
+                          </Badge>
+                        )}
                         {isGlobal && (
                           <Badge
                             variant="outline"
@@ -212,7 +224,7 @@ export function SkillsTab({
                       </span>
                     </span>
                   </button>
-                  {canEdit && !isGlobal && (
+                  {canEdit && !isGlobal && !isRole && (
                     <>
                       {busy ? (
                         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
