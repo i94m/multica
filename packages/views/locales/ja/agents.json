@@ -196,7 +196,8 @@
     "edit_description_title": "説明を編集",
     "description_placeholder": "このエージェントは何をしますか？",
     "save": "保存",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "section_role_instructions": "ロールと指示"
   },
   "overview": {
     "attention_title": "対応が必要な実行",

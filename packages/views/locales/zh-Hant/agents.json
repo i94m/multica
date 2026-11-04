@@ -204,7 +204,8 @@
     "edit_description_title": "編輯描述",
     "description_placeholder": "這個 AI 代理做什麼？",
     "save": "儲存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "section_role_instructions": "角色與指令"
   },
   "overview": {
     "attention_title": "需要處理的執行",

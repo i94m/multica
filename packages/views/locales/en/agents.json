@@ -213,7 +213,8 @@
     "edit_description_title": "Edit description",
     "description_placeholder": "What does this agent do?",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "section_role_instructions": "Role and instructions"
   },
   "overview": {
     "attention_title": "Runs need attention",

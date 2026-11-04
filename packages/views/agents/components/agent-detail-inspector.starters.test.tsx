@@ -8,6 +8,8 @@ import type { Agent, AgentRuntime } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
 import { AgentDetailInspector } from "./agent-detail-inspector";
 
+vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
+
 vi.mock("@tanstack/react-query", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-query")>()),
   useQuery: () => ({ data: undefined, isSuccess: false }),

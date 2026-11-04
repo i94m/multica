@@ -13,6 +13,8 @@ import { renderWithI18n } from "../../test/i18n";
 const mockInitiateListModels = vi.hoisted(() => vi.fn());
 const mockGetListModelsResult = vi.hoisted(() => vi.fn());
 
+vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
+
 vi.mock("@multica/core/api", () => ({
   api: {
     initiateListModels: (...args: unknown[]) =>

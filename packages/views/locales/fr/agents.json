@@ -213,7 +213,8 @@
     "edit_description_title": "Modifier la description",
     "description_placeholder": "Que fait cet agent ?",
     "save": "Enregistrer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "section_role_instructions": "Rôle et instructions"
   },
   "overview": {
     "attention_title": "Des exécutions demandent votre attention",

@@ -11,6 +11,8 @@ const picker = vi.hoisted(() => ({
 }));
 const mockInitiateListModels = vi.hoisted(() => vi.fn());
 
+vi.mock("@multica/core/hooks", () => ({ useWorkspaceId: () => "ws-1" }));
+
 vi.mock("@multica/core/api", () => ({
   api: {
     initiateListModels: (...args: unknown[]) => mockInitiateListModels(...args),

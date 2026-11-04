@@ -204,7 +204,8 @@
     "edit_description_title": "编辑描述",
     "description_placeholder": "这个智能体做什么？",
     "save": "保存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "section_role_instructions": "角色与指令"
   },
   "overview": {
     "attention_title": "需要处理的运行",

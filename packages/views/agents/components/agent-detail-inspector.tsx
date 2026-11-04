@@ -27,6 +27,8 @@ import {
 } from "../../settings/components/settings-layout";
 import { useAutoSave } from "../../settings/components/use-auto-save";
 import { useT } from "../../i18n";
+import { AgentRoleSelect } from "./agent-role-select";
+import { RoleSkillsPreview } from "./role-skills-preview";
 import { CharCounter } from "./char-counter";
 import { ConversationStartersEditor } from "./conversation-starters-editor";
 import { NewChatPreview } from "./new-chat-preview";
@@ -98,11 +100,18 @@ export function AgentDetailInspector({
   const [starters, setStarters] = useState<AgentConversationStarter[]>(
     agent.conversation_starters ?? [],
   );
+  // Role + instructions live here too: the create form collects them, so the
+  // settings form must expose the same two fields or an existing agent can
+  // never be re-pointed at a role.
+  const [roleId, setRoleId] = useState(agent.role_id ?? "");
+  const [instructions, setInstructions] = useState(agent.instructions ?? "");
 
   useEffect(() => {
     setName(agent.name);
     setDescription(agent.description ?? "");
     setStarters(agent.conversation_starters ?? []);
+    setRoleId(agent.role_id ?? "");
+    setInstructions(agent.instructions ?? "");
     // Reset only when moving to another agent. Cache updates from this form
     // must not erase a newer local draft while an autosave is in flight.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -169,6 +178,31 @@ export function AgentDetailInspector({
   });
   const startersFocus = useConversationStartersFocus(agent.id, showStarters);
   const nameInvalid = name.trim().length === 0;
+
+  const roleDraft = useMemo(
+    () => ({ roleId, instructions }),
+    [roleId, instructions],
+  );
+  const savedRoleDraft = useMemo(
+    () => ({
+      roleId: agent.role_id ?? "",
+      instructions: agent.instructions ?? "",
+    }),
+    [agent.role_id, agent.instructions],
+  );
+  const roleAutoSave = useAutoSave({
+    value: roleDraft,
+    savedValue: savedRoleDraft,
+    onSave: async (next) => {
+      await update({
+        role_id: next.roleId || null,
+        instructions: next.instructions,
+      });
+    },
+    enabled: canEdit,
+    isEqual: (left, right) =>
+      left.roleId === right.roleId && left.instructions === right.instructions,
+  });
 
   return (
     <div className="@container">
@@ -278,6 +312,62 @@ export function AgentDetailInspector({
                   </SettingsRow>
                 </div>
               ) : null}
+            </SettingsCard>
+          </SettingsSection>
+
+          <SettingsSection
+            title={t(($) => $.inspector.section_role_instructions)}
+            action={
+              <SettingsSaveState
+                status={roleAutoSave.status}
+                savingLabel={ts(($) => $.auto_save.saving)}
+                savedLabel={ts(($) => $.auto_save.saved)}
+                errorLabel={ts(($) => $.auto_save.failed)}
+              />
+            }
+          >
+            <SettingsCard>
+              <SettingsRow
+                label={t(($) => $.role_select.label)}
+                size="text"
+                align="start"
+              >
+                <div className="space-y-2">
+                  <AgentRoleSelect
+                    id={`agent-settings-role-${agent.id}`}
+                    value={roleId}
+                    onChange={(next) => setRoleId(next ?? "")}
+                    disabled={!canEdit}
+                  />
+                  {roleId ? <RoleSkillsPreview roleId={roleId} /> : null}
+                </div>
+              </SettingsRow>
+              <SettingsRow
+                label={t(($) => $.create_dialog.instructions.label)}
+                size="text"
+                align="start"
+              >
+                <div className="space-y-1">
+                  {roleId ? (
+                    <p className="text-caption leading-5 text-muted-foreground">
+                      {t(($) => $.role_select.supplement_hint)}
+                    </p>
+                  ) : null}
+                  <Textarea
+                    name="agent-instructions"
+                    aria-label={t(($) => $.create_dialog.instructions.label)}
+                    value={instructions}
+                    onChange={(event) => setInstructions(event.target.value)}
+                    onBlur={roleAutoSave.flush}
+                    disabled={!canEdit}
+                    rows={10}
+                    className="resize-y font-mono text-label"
+                    placeholder={t(
+                      ($) => $.create_dialog.instructions.editor_placeholder,
+                    )}
+                  />
+                </div>
+              </SettingsRow>
             </SettingsCard>
           </SettingsSection>
 

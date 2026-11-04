@@ -204,7 +204,8 @@
     "edit_description_title": "설명 수정",
     "description_placeholder": "이 에이전트는 무엇을 하나요?",
     "save": "저장",
-    "cancel": "취소"
+    "cancel": "취소",
+    "section_role_instructions": "역할 및 지시"
   },
   "overview": {
     "attention_title": "확인이 필요한 실행",
