@@ -197,6 +197,61 @@ func (q *Queries) ListAgentRoles(ctx context.Context, workspaceID pgtype.UUID) (
 	return items, nil
 }
 
+const listAllAgentRoles = `-- name: ListAllAgentRoles :many
+SELECT
+    r.id, r.workspace_id, r.name, r.description, r.instructions, r.created_by, r.created_at, r.updated_at,
+    (SELECT count(*) FROM agent a WHERE a.role_id = r.id) AS agent_count,
+    (SELECT count(*) FROM agent_role_skill ars WHERE ars.role_id = r.id) AS skill_count
+FROM agent_role r
+ORDER BY lower(r.name)
+`
+
+type ListAllAgentRolesRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	Name         string             `json:"name"`
+	Description  string             `json:"description"`
+	Instructions string             `json:"instructions"`
+	CreatedBy    pgtype.UUID        `json:"created_by"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	AgentCount   int64              `json:"agent_count"`
+	SkillCount   int64              `json:"skill_count"`
+}
+
+// Admin console read: every role, with the agent and skill counts the list
+// renders. Roles are platform-level, so there is no workspace filter.
+func (q *Queries) ListAllAgentRoles(ctx context.Context) ([]ListAllAgentRolesRow, error) {
+	rows, err := q.db.Query(ctx, listAllAgentRoles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllAgentRolesRow{}
+	for rows.Next() {
+		var i ListAllAgentRolesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Instructions,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.AgentCount,
+			&i.SkillCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateAgentRole = `-- name: UpdateAgentRole :one
 UPDATE agent_role SET
     name = $1,

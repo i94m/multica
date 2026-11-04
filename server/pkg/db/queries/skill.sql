@@ -141,17 +141,21 @@ DELETE FROM skill_file WHERE skill_id = $1;
 -- Agent-Skill junction
 
 -- name: ListAgentSkills :many
--- Global skills (workspace_id IS NULL) apply to every agent automatically, so
--- they are part of the effective set without an agent_skill row. Workspace
--- skills still require an enabled binding.
+-- Deprecated union kept for callers outside the claim path. Global skills are
+-- no longer applied automatically; an agent acquires a skill through its role
+-- or through an enabled binding of its own.
 SELECT s.* FROM skill s
-WHERE s.workspace_id IS NULL
+WHERE EXISTS (
+        SELECT 1 FROM agent_skill ask
+        WHERE ask.agent_id = $1
+          AND ask.skill_id = s.id
+          AND ask.enabled = TRUE
+    )
    OR EXISTS (
-       SELECT 1 FROM agent_skill ask
-       WHERE ask.agent_id = $1
-         AND ask.skill_id = s.id
-         AND ask.enabled = TRUE
-   )
+        SELECT 1 FROM agent a
+        JOIN agent_role_skill ars ON ars.role_id = a.role_id
+        WHERE a.id = $1 AND ars.skill_id = s.id
+    )
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillsByIDs :many
@@ -164,8 +168,7 @@ ORDER BY s.name ASC;
 SELECT s.* FROM skill s
 WHERE s.id = ANY(sqlc.arg('skill_ids')::uuid[])
   AND (
-      s.workspace_id IS NULL
-      OR EXISTS (
+      EXISTS (
           SELECT 1 FROM agent_skill ask
           WHERE ask.agent_id = $1
             AND ask.skill_id = s.id
@@ -187,21 +190,13 @@ ORDER BY s.name ASC;
 -- are applied automatically and cannot be disabled per agent. Workspace
 -- skills appear only with a binding row and keep that row's enabled state.
 SELECT s.id, s.workspace_id, s.name, s.description, s.config, s.created_by, s.created_at, s.updated_at,
-       CASE
-           WHEN s.workspace_id IS NULL THEN TRUE
-           WHEN ars.skill_id IS NOT NULL THEN TRUE
-           ELSE ask.enabled
-       END::boolean AS enabled,
-       CASE
-           WHEN ars.skill_id IS NOT NULL THEN 'role'
-           WHEN s.workspace_id IS NULL THEN 'global'
-           ELSE 'agent'
-       END::text AS source
+       CASE WHEN ars.skill_id IS NOT NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled,
+       CASE WHEN ars.skill_id IS NOT NULL THEN 'role' ELSE 'agent' END::text AS source
 FROM skill s
 LEFT JOIN agent_skill ask ON ask.skill_id = s.id AND ask.agent_id = $1
 LEFT JOIN agent a ON a.id = $1
 LEFT JOIN agent_role_skill ars ON ars.skill_id = s.id AND ars.role_id = a.role_id
-WHERE s.workspace_id IS NULL OR ask.agent_id IS NOT NULL OR ars.skill_id IS NOT NULL
+WHERE ask.agent_id IS NOT NULL OR ars.skill_id IS NOT NULL
 ORDER BY s.name ASC;
 
 -- name: ListAgentSkillNamesByAgentIDs :many
@@ -209,8 +204,7 @@ ORDER BY s.name ASC;
 -- when an agent has no binding row at all.
 SELECT agents.agent_id::uuid AS agent_id, s.name
 FROM unnest(sqlc.arg('agent_ids')::uuid[]) AS agents(agent_id)
-JOIN skill s ON s.workspace_id IS NULL
-             OR EXISTS (
+JOIN skill s ON EXISTS (
                  SELECT 1 FROM agent_skill ask
                  WHERE ask.agent_id = agents.agent_id
                    AND ask.skill_id = s.id
@@ -244,6 +238,14 @@ DELETE FROM agent_skill WHERE agent_id = $1;
 --
 -- A role is an agent's job definition; its skills are inherited by every agent
 -- bound to that role and cannot be disabled per agent. See agent_role_skill.
+
+-- name: ListGlobalSkillsForAdmin :many
+-- Admin console read: the skill pool roles may draw from. Only global skills
+-- are eligible (a workspace-owned skill must not ride a role into another
+-- tenant), so this is the whole picker.
+SELECT * FROM skill
+WHERE workspace_id IS NULL
+ORDER BY lower(name);
 
 -- name: ListRoleSkills :many
 SELECT s.* FROM skill s
@@ -306,14 +308,9 @@ WHERE ask.agent_id = a.id
 -- have a binding row. Workspace skills keep the binding-row behaviour, and a
 -- role's skills reach every agent bound to that role.
 SELECT a.id AS agent_id, s.id, s.workspace_id, s.name, s.description,
-       CASE
-           WHEN s.workspace_id IS NULL THEN TRUE
-           WHEN ars.skill_id IS NOT NULL THEN TRUE
-           ELSE ask.enabled
-       END::boolean AS enabled
+       CASE WHEN ars.skill_id IS NOT NULL THEN TRUE ELSE ask.enabled END::boolean AS enabled
 FROM agent a
-JOIN skill s ON s.workspace_id IS NULL
-             OR EXISTS (
+JOIN skill s ON EXISTS (
                  SELECT 1 FROM agent_skill bound
                  WHERE bound.agent_id = a.id AND bound.skill_id = s.id
              )

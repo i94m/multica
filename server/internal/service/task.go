@@ -7128,11 +7128,11 @@ func (s *TaskService) publishAgentStatus(agent db.Agent) {
 // starts on rules it is missing. Callers must settle the failure (preserve the
 // claim for redelivery, or 5xx the resolve) instead of dispatching that.
 func (s *TaskService) LoadAgentSkills(ctx context.Context, agentID pgtype.UUID) ([]AgentSkillData, error) {
-	// Three layers, highest precedence first: the agent's role (a job
-	// definition the agent cannot opt out of), the skills the agent bound for
-	// itself, then the global skills every agent gets. They are separate reads
-	// because the merge needs to know where each skill came from — a single
-	// UNION would lose that, and the precedence rule is by layer.
+	// Two layers, highest precedence first: the agent's role (a job definition
+	// the agent cannot opt out of), then the skills the agent bound for itself.
+	// They are separate reads because the merge needs to know where each skill
+	// came from — a single UNION would lose that, and the precedence rule is by
+	// layer.
 	roleSkills, err := s.Queries.ListRoleSkillsByAgent(ctx, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("list role skills: %w", err)
@@ -7141,15 +7141,11 @@ func (s *TaskService) LoadAgentSkills(ctx context.Context, agentID pgtype.UUID) 
 	if err != nil {
 		return nil, fmt.Errorf("list agent-bound skills: %w", err)
 	}
-	globalSkills, err := s.Queries.ListGlobalSkills(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list global skills: %w", err)
-	}
-
+	// Global skills are a library roles draw from, not a layer every agent
+	// gets: an agent only acquires one through its role or by binding it.
 	merged, grants := mergeAgentSkillLayers(util.UUIDToString(agentID), []agentSkillLayer{
 		{source: AgentSkillGrantRole, skills: roleSkills},
 		{source: AgentSkillGrantAgent, skills: agentSkills},
-		{source: AgentSkillGrantGlobal, skills: globalSkills},
 	})
 	if len(merged) == 0 {
 		return nil, nil
@@ -7181,9 +7177,7 @@ type agentSkillLayer struct {
 //     with a warning. Skills are materialized into a per-name directory in the
 //     execution environment, so two skills sharing a name would silently
 //     overwrite each other; precedence makes the outcome deterministic instead
-//     of depending on read order. A global "x" and a workspace "x" can both
-//     exist (their unique indexes are separate), so this is reachable without
-//     anyone doing something obviously wrong.
+//     of depending on read order.
 //
 // The result is sorted by name so the bundle set — and therefore the hash the
 // daemon validates — does not depend on layer or row order.

@@ -29,6 +29,10 @@ func insertRoleSkillSkill(t *testing.T, workspaceID, name, content string) strin
 
 func createRoleForSkillsTest(t *testing.T, name string) string {
 	t.Helper()
+	// Roles are platform-level now: creating one requires a platform admin.
+	dbfx.Exec(t, "INSERT INTO platform_admin (user_id) VALUES ($1) ON CONFLICT DO NOTHING", testUserID)
+	dbfx.Cleanup(t, "DELETE FROM platform_admin WHERE user_id = $1", testUserID)
+
 	w := httptest.NewRecorder()
 	req := newRequest("POST", "/api/agent-roles", map[string]any{
 		"name":         name,
@@ -83,10 +87,10 @@ func TestAgentRoleSkillsLifecycle(t *testing.T) {
 	}
 
 	roleID := createRoleForSkillsTest(t, fmt.Sprintf("skills-role-%d", time.Now().UnixNano()))
-	workspaceSkill := insertRoleSkillSkill(t, testWorkspaceID, "role-skill-a", "body a")
-	globalSkill := insertRoleSkillSkill(t, "", "role-skill-global", "body g")
+	globalA := insertRoleSkillSkill(t, "", "role-skill-a", "body a")
+	globalB := insertRoleSkillSkill(t, "", "role-skill-b", "body b")
 
-	if w := setRoleSkills(t, roleID, []string{workspaceSkill, globalSkill}); w.Code != http.StatusOK {
+	if w := setRoleSkills(t, roleID, []string{globalA, globalB}); w.Code != http.StatusOK {
 		t.Fatalf("SetAgentRoleSkills: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 
@@ -94,29 +98,20 @@ func TestAgentRoleSkillsLifecycle(t *testing.T) {
 	if len(skills) != 2 {
 		t.Fatalf("role skills = %d, want 2: %v", len(skills), skills)
 	}
-	scopes := map[string]string{}
 	for _, s := range skills {
-		scopes[s.ID] = s.Scope
 		if !s.Enabled {
 			t.Fatalf("role skill %q reported disabled; role skills are always on", s.Name)
 		}
-	}
-	if scopes[workspaceSkill] != "workspace" || scopes[globalSkill] != "global" {
-		t.Fatalf("skill scopes = %v, want workspace/global", scopes)
-	}
-
-	// Same name as the workspace skill, different id, so both are legal rows —
-	// but they would collide in the execution environment's per-name directory.
-	nameClash := insertRoleSkillSkill(t, "", "role-skill-a", "duplicate name")
-	if w := setRoleSkills(t, roleID, []string{workspaceSkill, nameClash}); w.Code != http.StatusBadRequest {
-		t.Fatalf("duplicate-name set: expected 400, got %d: %s", w.Code, w.Body.String())
+		if s.Scope != "global" {
+			t.Fatalf("role skill %q scope = %q, want global", s.Name, s.Scope)
+		}
 	}
 
-	// A skill owned by another workspace must not ride a workspace role.
-	otherWorkspace := dbfx.Workspace(t, "Role Skills Other", fmt.Sprintf("role-skills-other-%d", time.Now().UnixNano()))
-	foreignSkill := insertRoleSkillSkill(t, otherWorkspace, "foreign-skill", "foreign body")
-	if w := setRoleSkills(t, roleID, []string{foreignSkill}); w.Code != http.StatusBadRequest {
-		t.Fatalf("foreign-workspace skill: expected 400, got %d: %s", w.Code, w.Body.String())
+	// A workspace-owned skill must not ride a role: it would carry one tenant's
+	// private content into every workspace the role is visible in.
+	workspaceSkill := insertRoleSkillSkill(t, testWorkspaceID, "role-skill-workspace", "private body")
+	if w := setRoleSkills(t, roleID, []string{workspaceSkill}); w.Code != http.StatusBadRequest {
+		t.Fatalf("workspace skill in role: expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Plain members cannot edit a role's skills.
@@ -140,7 +135,7 @@ func TestAgentRoleSkillReplacesPerAgentBindings(t *testing.T) {
 	}
 
 	roleID := createRoleForSkillsTest(t, fmt.Sprintf("skills-cleanup-role-%d", time.Now().UnixNano()))
-	skillID := insertRoleSkillSkill(t, testWorkspaceID, "role-skill-cleanup", "body")
+	skillID := insertRoleSkillSkill(t, "", "role-skill-cleanup", "body")
 	agentID := dbfx.Agent(t, "role-skills-cleanup-agent", "", testutil.Cols{"role_id": roleID})
 	dbfx.InsertNoID(t, "agent_skill", testutil.Cols{
 		"agent_id": agentID,

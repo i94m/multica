@@ -48,6 +48,18 @@ func RegisterRoutes(
 			r.Get("/runtimes/{id}", h.GetRuntime)
 
 			r.Get("/usage", h.Usage)
+
+			// Roles are platform-level and maintained here: this is the only
+			// write surface in the console.
+			r.Get("/agent-roles", h.ListAgentRoles)
+			r.Post("/agent-roles", h.CreateAgentRole)
+			r.Route("/agent-roles/{id}", func(r chi.Router) {
+				r.Put("/", h.UpdateAgentRole)
+				r.Delete("/", h.DeleteAgentRole)
+				r.Get("/skills", h.ListAgentRoleSkills)
+				r.Put("/skills", h.SetAgentRoleSkills)
+			})
+			r.Get("/skills", h.ListGlobalSkills)
 		})
 	})
 }

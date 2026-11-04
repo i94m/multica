@@ -13,4 +13,5 @@ export const adminPaths = {
   runtimes: () => "/admin/runtimes",
   runtime: (id: string) => `/admin/runtimes/${encode(id)}`,
   usage: () => "/admin/usage",
+  roles: () => "/admin/roles",
 };

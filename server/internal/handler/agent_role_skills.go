@@ -198,10 +198,8 @@ func (h *Handler) SetAgentRoleSkills(w http.ResponseWriter, r *http.Request) {
 // resolveRoleSkills loads and validates a requested skill set for a role.
 //
 // Two rules decide what a role may carry:
-//   - Scope: a global role belongs to every workspace, so it may only grant
-//     global skills. A workspace role may grant its own workspace's skills plus
-//     globals. Anything else would ship one tenant's private skill content to
-//     another.
+//   - Scope: roles are platform-level and may only grant global skills.
+//     Anything else would ship one tenant's private skill content to another.
 //   - Name uniqueness inside the set: the execution environment materializes
 //     skills into a per-name directory, so two skills of the same name in one
 //     role would silently overwrite each other. Cross-layer collisions are
@@ -231,12 +229,10 @@ func (h *Handler) resolveRoleSkills(ctx context.Context, role db.AgentRole, requ
 			}
 			return nil, "failed to load skill"
 		}
-		if role.WorkspaceID.Valid {
-			if skill.WorkspaceID.Valid && util.UUIDToString(skill.WorkspaceID) != util.UUIDToString(role.WorkspaceID) {
-				return nil, "a role can only carry skills from its own workspace or global skills"
-			}
-		} else if skill.WorkspaceID.Valid {
-			return nil, "a global role can only carry global skills"
+		// Roles are platform-level and may only grant global skills: a skill
+		// owned by one workspace must never ride a role into another tenant.
+		if skill.WorkspaceID.Valid {
+			return nil, "a role can only carry global skills"
 		}
 		name := strings.ToLower(strings.TrimSpace(skill.Name))
 		if _, ok := seenName[name]; ok {

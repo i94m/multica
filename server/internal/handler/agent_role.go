@@ -165,12 +165,10 @@ func (h *Handler) ListAgentRoles(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, roles)
 }
 
-// CreateAgentRole creates a workspace role, or a global role when scope is
-// "global". A workspace role requires workspace owner/admin; a global role is
-// instance-level and requires a platform admin, because it is visible in (and,
-// now that roles carry skills, can push content into) every workspace.
+// CreateAgentRole creates a platform role. Roles are maintained by platform
+// admins (the admin console is the management surface), so every role is
+// global; the `scope` field older clients still send is accepted and ignored.
 func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
-	workspaceID := h.resolveWorkspaceID(r)
 	var req createAgentRoleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -181,19 +179,7 @@ func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	scope := strings.TrimSpace(req.Scope)
-	if scope == "" {
-		scope = "workspace"
-	}
-	if scope != "workspace" && scope != "global" {
-		writeError(w, http.StatusBadRequest, `scope must be "workspace" or "global"`)
-		return
-	}
-	if scope == "global" {
-		if !h.requirePlatformAdmin(w, r) {
-			return
-		}
-	} else if !h.roleAdmin(w, r, workspaceID) {
+	if !h.requirePlatformAdmin(w, r) {
 		return
 	}
 	userID, ok := requireUserID(w, r)
@@ -204,18 +190,11 @@ func (h *Handler) CreateAgentRole(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
 	params := db.CreateAgentRoleParams{
 		Name:         name,
 		Description:  description,
 		Instructions: instructions,
 		CreatedBy:    userUUID,
-	}
-	if scope == "workspace" {
-		params.WorkspaceID = wsUUID
 	}
 	role, err := h.Queries.CreateAgentRole(r.Context(), params)
 	if err != nil {
@@ -250,27 +229,10 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	scope := strings.TrimSpace(req.Scope)
-	if scope == "" {
-		scope = agentRoleScope(role.WorkspaceID)
-	}
-	if scope != "workspace" && scope != "global" {
-		writeError(w, http.StatusBadRequest, `scope must be "workspace" or "global"`)
-		return
-	}
-	// Promoting a workspace role to global hands its content to every
-	// workspace, so it needs the same grant as editing a global role.
-	if scope == "global" && role.WorkspaceID.Valid && !h.requirePlatformAdmin(w, r) {
-		return
-	}
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
-	if !ok {
-		return
-	}
+	// Roles are platform-level; the scope field is ignored on update too, so a
+	// stale client cannot demote one back into a workspace.
 	targetWorkspace := pgtype.UUID{}
-	if scope == "workspace" {
-		targetWorkspace = wsUUID
-	}
+	_ = targetWorkspace
 
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
@@ -279,18 +241,6 @@ func (h *Handler) UpdateAgentRole(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	qtx := h.Queries.WithTx(tx)
-
-	// A global role becoming workspace-owned must release every binding outside
-	// the target workspace; their owners can no longer resolve the role.
-	if !role.WorkspaceID.Valid && scope == "workspace" {
-		if err := qtx.ClearAgentRoleReferencesOutsideWorkspace(r.Context(), db.ClearAgentRoleReferencesOutsideWorkspaceParams{
-			RoleID:      role.ID,
-			WorkspaceID: wsUUID,
-		}); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to detach role from other workspaces")
-			return
-		}
-	}
 
 	updated, err := qtx.UpdateAgentRole(r.Context(), db.UpdateAgentRoleParams{
 		ID:           role.ID,

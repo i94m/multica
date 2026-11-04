@@ -2,66 +2,28 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/testutil"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
 
-// A global skill is part of every agent's effective set without an
-// agent_skill row: it must show up in management lists, agent responses, the
-// execution load, and the per-skill resolve path.
-func TestGlobalSkillAppliesWithoutAgentBinding(t *testing.T) {
-	agentID := createHandlerTestAgent(t, "Global Auto Apply Agent", nil)
-	globalID := insertHandlerTestGlobalSkill(t, "global-auto-"+t.Name(), "# Applies everywhere")
+// A global skill is a library entry, not an automatic grant: an agent only
+// gets one through the role it is bound to.
+func TestGlobalSkillRequiresRole(t *testing.T) {
+	agentID := createHandlerTestAgent(t, "Global Requires Role Agent", nil)
+	globalID := insertHandlerTestGlobalSkill(t, "global-role-"+t.Name(), "# Applies via role")
 
+	// Without a role the skill is absent everywhere.
 	var listed []SkillSummaryResponse
 	testutil.Call(t, testHandler.ListAgentSkills, withURLParam(newRequest(
 		"GET", "/api/agents/"+agentID+"/skills", nil,
 	), "id", agentID)).Want(http.StatusOK).JSON(&listed)
-	assertSkillIDsPresent(t, listed, globalID)
-	for _, skill := range listed {
-		if skill.ID != globalID {
-			continue
-		}
-		if skill.Scope != skillScopeGlobal {
-			t.Fatalf("scope = %q, want %q", skill.Scope, skillScopeGlobal)
-		}
-		if skill.Enabled == nil || !*skill.Enabled {
-			t.Fatalf("global skill must report enabled, got %+v", skill)
-		}
-	}
-
-	var agentResp AgentResponse
-	testutil.Call(t, testHandler.GetAgent, withURLParam(newRequest(
-		"GET", "/api/agents/"+agentID, nil,
-	), "id", agentID)).Want(http.StatusOK).JSON(&agentResp)
-	assertAgentSkillSummariesPresent(t, agentResp.Skills, globalID)
-
-	var agents []AgentResponse
-	testutil.Call(t, testHandler.ListAgents, newRequest("GET", "/api/agents", nil)).
-		Want(http.StatusOK).JSON(&agents)
-	foundAgent := false
-	for _, agent := range agents {
-		if agent.ID != agentID {
-			continue
-		}
-		foundAgent = true
-		assertAgentSkillSummariesPresent(t, agent.Skills, globalID)
-	}
-	if !foundAgent {
-		t.Fatalf("agent %s missing from ListAgents", agentID)
-	}
-
-	active, err := testHandler.Queries.ListAgentSkills(context.Background(), parseUUID(agentID))
-	if err != nil {
-		t.Fatalf("ListAgentSkills: %v", err)
-	}
-	if !containsSkillID(active, globalID) {
-		t.Fatalf("global skill missing from execution load: %+v", active)
-	}
+	assertSkillIDsAbsent(t, listed, globalID)
 
 	resolved, err := testHandler.Queries.ListAgentSkillsByIDs(context.Background(), db.ListAgentSkillsByIDsParams{
 		AgentID:  parseUUID(agentID),
@@ -70,8 +32,40 @@ func TestGlobalSkillAppliesWithoutAgentBinding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAgentSkillsByIDs: %v", err)
 	}
+	if len(resolved) != 0 {
+		t.Fatalf("global skill resolved without a role, got %+v", resolved)
+	}
+
+	// Grant it through a role: now it is part of the agent's effective set in
+	// the management list, the execution load, and the per-skill resolve path.
+	roleID := createRoleForSkillsTest(t, fmt.Sprintf("global-role-%d", time.Now().UnixNano()))
+	if w := setRoleSkills(t, roleID, []string{globalID}); w.Code != http.StatusOK {
+		t.Fatalf("SetAgentRoleSkills: %d %s", w.Code, w.Body.String())
+	}
+	dbfx.Exec(t, "UPDATE agent SET role_id = $1 WHERE id = $2", roleID, agentID)
+
+	testutil.Call(t, testHandler.ListAgentSkills, withURLParam(newRequest(
+		"GET", "/api/agents/"+agentID+"/skills", nil,
+	), "id", agentID)).Want(http.StatusOK).JSON(&listed)
+	assertSkillIDsPresent(t, listed, globalID)
+
+	active, err := testHandler.Queries.ListAgentSkills(context.Background(), parseUUID(agentID))
+	if err != nil {
+		t.Fatalf("ListAgentSkills: %v", err)
+	}
+	if !containsSkillID(active, globalID) {
+		t.Fatalf("role-granted global skill missing from execution load: %+v", active)
+	}
+
+	resolved, err = testHandler.Queries.ListAgentSkillsByIDs(context.Background(), db.ListAgentSkillsByIDsParams{
+		AgentID:  parseUUID(agentID),
+		SkillIds: []pgtype.UUID{parseUUID(globalID)},
+	})
+	if err != nil {
+		t.Fatalf("ListAgentSkillsByIDs: %v", err)
+	}
 	if len(resolved) != 1 || uuidToString(resolved[0].ID) != globalID {
-		t.Fatalf("global skill must resolve without a binding, got %+v", resolved)
+		t.Fatalf("role-granted global skill did not resolve, got %+v", resolved)
 	}
 }
 
@@ -121,7 +115,8 @@ func TestSetAgentSkillsDropsGlobalIDs(t *testing.T) {
 	testutil.Call(t, testHandler.ListAgentSkills, withURLParam(newRequest(
 		"GET", "/api/agents/"+agentID+"/skills", nil,
 	), "id", agentID)).Want(http.StatusOK).JSON(&listed)
-	assertSkillIDsPresent(t, listed, globalID, workspaceSkillID)
+	assertSkillIDsAbsent(t, listed, globalID)
+	assertSkillIDsPresent(t, listed, workspaceSkillID)
 }
 
 func containsSkillID(skills []db.Skill, id string) bool {
@@ -141,4 +136,13 @@ func assertAgentSkillSummariesPresent(t *testing.T, skills []AgentSkillSummary, 
 		}
 	}
 	t.Fatalf("agent response missing skill %s; got %+v", wantID, skills)
+}
+
+func assertSkillIDsAbsent(t *testing.T, skills []SkillSummaryResponse, wantID string) {
+	t.Helper()
+	for _, skill := range skills {
+		if skill.ID == wantID {
+			t.Fatalf("skill %s present, want absent", wantID)
+		}
+	}
 }

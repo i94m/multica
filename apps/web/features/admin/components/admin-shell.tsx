@@ -28,6 +28,7 @@ const navItems = [
   { key: "agents", href: adminPaths.agents(), icon: Bot },
   { key: "runtimes", href: adminPaths.runtimes(), icon: Monitor },
   { key: "usage", href: adminPaths.usage(), icon: BarChart3 },
+  { key: "roles", href: adminPaths.roles(), icon: Shield },
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

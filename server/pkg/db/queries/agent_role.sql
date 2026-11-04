@@ -9,6 +9,16 @@ FROM agent_role r
 WHERE r.workspace_id = @workspace_id OR r.workspace_id IS NULL
 ORDER BY (r.workspace_id IS NULL), lower(r.name);
 
+-- name: ListAllAgentRoles :many
+-- Admin console read: every role, with the agent and skill counts the list
+-- renders. Roles are platform-level, so there is no workspace filter.
+SELECT
+    r.*,
+    (SELECT count(*) FROM agent a WHERE a.role_id = r.id) AS agent_count,
+    (SELECT count(*) FROM agent_role_skill ars WHERE ars.role_id = r.id) AS skill_count
+FROM agent_role r
+ORDER BY lower(r.name);
+
 -- name: GetAgentRole :one
 SELECT * FROM agent_role WHERE id = $1;
 
