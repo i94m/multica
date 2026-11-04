@@ -44,7 +44,6 @@ import { toast } from "sonner";
 import { useT } from "../../i18n";
 import {
   CollectionPageHeader,
-  CollectionPageHeaderAction,
   CollectionPageState,
 } from "../../layout/collection-page";
 
@@ -157,15 +156,12 @@ export function RolesPage() {
       <CollectionPageHeader
         icon={CircleUser}
         title={t(($) => $.roles.title)}
-        count={roles.length}
-        description={t(($) => $.roles.tagline)}
         actions={
           isAdmin ? (
-            <CollectionPageHeaderAction
-              icon={Plus}
-              label={t(($) => $.roles.new_role)}
-              onClick={openCreate}
-            />
+            <Button type="button" size="sm" onClick={openCreate}>
+              <Plus className="size-3" />
+              {t(($) => $.roles.new_role)}
+            </Button>
           ) : undefined
         }
       />
