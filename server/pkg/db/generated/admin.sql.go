@@ -377,6 +377,7 @@ SELECT
     u.email AS owner_email,
     a.runtime_id,
     r.name AS runtime_name,
+    ar.name AS role_name,
     a.model,
     a.created_at,
     a.updated_at,
@@ -386,6 +387,7 @@ FROM agent a
 JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN "user" u ON u.id = a.owner_id
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN agent_role ar ON ar.id = a.role_id
 WHERE a.id = $1
 `
 
@@ -404,6 +406,7 @@ type GetAdminAgentRow struct {
 	OwnerEmail     pgtype.Text        `json:"owner_email"`
 	RuntimeID      pgtype.UUID        `json:"runtime_id"`
 	RuntimeName    pgtype.Text        `json:"runtime_name"`
+	RoleName       pgtype.Text        `json:"role_name"`
 	Model          pgtype.Text        `json:"model"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
@@ -429,6 +432,7 @@ func (q *Queries) GetAdminAgent(ctx context.Context, id pgtype.UUID) (GetAdminAg
 		&i.OwnerEmail,
 		&i.RuntimeID,
 		&i.RuntimeName,
+		&i.RoleName,
 		&i.Model,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -741,6 +745,7 @@ SELECT
     u.email AS owner_email,
     a.runtime_id,
     r.name AS runtime_name,
+    ar.name AS role_name,
     a.created_at,
     a.archived_at,
     (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days')::bigint AS runs_30d
@@ -748,6 +753,7 @@ FROM agent a
 JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN "user" u ON u.id = a.owner_id
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN agent_role ar ON ar.id = a.role_id
 CROSS JOIN params p
 WHERE (
     p.query = ''
@@ -798,6 +804,7 @@ type ListAdminAgentsRow struct {
 	OwnerEmail     pgtype.Text        `json:"owner_email"`
 	RuntimeID      pgtype.UUID        `json:"runtime_id"`
 	RuntimeName    pgtype.Text        `json:"runtime_name"`
+	RoleName       pgtype.Text        `json:"role_name"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
 	Runs30d        int64              `json:"runs_30d"`
@@ -836,6 +843,7 @@ func (q *Queries) ListAdminAgents(ctx context.Context, arg ListAdminAgentsParams
 			&i.OwnerEmail,
 			&i.RuntimeID,
 			&i.RuntimeName,
+			&i.RoleName,
 			&i.CreatedAt,
 			&i.ArchivedAt,
 			&i.Runs30d,

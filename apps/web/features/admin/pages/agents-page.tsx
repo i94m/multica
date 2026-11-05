@@ -168,6 +168,7 @@ export default function AgentsPage() {
                 />
                 <TableHead>{copy.common.workspace}</TableHead>
                 <TableHead>{copy.common.owner}</TableHead>
+                <TableHead>{copy.common.role}</TableHead>
                 <SortableHead
                   label={copy.common.runs30d}
                   column="runs"
@@ -202,6 +203,9 @@ export default function AgentsPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {agent.owner_name ?? agent.owner_email ?? copy.common.none}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {agent.role_name ?? copy.common.none}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatNumber(agent.runs_30d, locale)}

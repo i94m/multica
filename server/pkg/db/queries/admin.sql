@@ -315,6 +315,7 @@ SELECT
     u.email AS owner_email,
     a.runtime_id,
     r.name AS runtime_name,
+    ar.name AS role_name,
     a.created_at,
     a.archived_at,
     (SELECT count(*) FROM agent_task_queue t WHERE t.agent_id = a.id AND t.created_at >= now() - interval '30 days')::bigint AS runs_30d
@@ -322,6 +323,7 @@ FROM agent a
 JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN "user" u ON u.id = a.owner_id
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN agent_role ar ON ar.id = a.role_id
 CROSS JOIN params p
 WHERE (
     p.query = ''
@@ -372,6 +374,7 @@ SELECT
     u.email AS owner_email,
     a.runtime_id,
     r.name AS runtime_name,
+    ar.name AS role_name,
     a.model,
     a.created_at,
     a.updated_at,
@@ -381,6 +384,7 @@ FROM agent a
 JOIN workspace w ON w.id = a.workspace_id
 LEFT JOIN "user" u ON u.id = a.owner_id
 LEFT JOIN agent_runtime r ON r.id = a.runtime_id
+LEFT JOIN agent_role ar ON ar.id = a.role_id
 WHERE a.id = $1;
 
 -- name: ListAdminRuntimes :many

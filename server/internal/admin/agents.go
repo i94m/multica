@@ -21,6 +21,7 @@ type adminAgentResponse struct {
 	OwnerEmail     *string `json:"owner_email"`
 	RuntimeID      string  `json:"runtime_id"`
 	RuntimeName    *string `json:"runtime_name"`
+	RoleName       *string `json:"role_name"`
 	CreatedAt      string  `json:"created_at"`
 	ArchivedAt     *string `json:"archived_at"`
 	Runs30d        int64   `json:"runs_30d"`
@@ -48,6 +49,7 @@ func listAgentResponse(row db.ListAdminAgentsRow) adminAgentResponse {
 		OwnerEmail:     textPtr(row.OwnerEmail),
 		RuntimeID:      uuidString(row.RuntimeID),
 		RuntimeName:    textPtr(row.RuntimeName),
+		RoleName:       textPtr(row.RoleName),
 		CreatedAt:      timestampString(row.CreatedAt),
 		ArchivedAt:     timePtr(row.ArchivedAt),
 		Runs30d:        row.Runs30d,
@@ -122,6 +124,7 @@ func (h *Handler) GetAgent(w http.ResponseWriter, r *http.Request) {
 		OwnerEmail:     textPtr(row.OwnerEmail),
 		RuntimeID:      uuidString(row.RuntimeID),
 		RuntimeName:    textPtr(row.RuntimeName),
+		RoleName:       textPtr(row.RoleName),
 		CreatedAt:      timestampString(row.CreatedAt),
 		ArchivedAt:     timePtr(row.ArchivedAt),
 		Runs30d:        row.Runs30d,

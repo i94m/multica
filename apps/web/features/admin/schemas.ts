@@ -138,6 +138,7 @@ export const adminAgentSchema = z.object({
   owner_email: nullableString,
   runtime_id: z.string().default(""),
   runtime_name: nullableString,
+  role_name: nullableString,
   created_at: z.string().default(""),
   archived_at: nullableString,
   runs_30d: z.number().default(0),
