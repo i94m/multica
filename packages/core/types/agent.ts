@@ -944,6 +944,8 @@ export interface SkillSummary {
   enabled?: boolean;
   /** Present on workspace skill lists after a backend that bulk-attaches labels. */
   labels?: Label[];
+  /** Roles that grant this skill, filled by the workspace skills list. */
+  role_names?: string[];
 }
 
 export interface Skill extends SkillSummary {

@@ -892,6 +892,43 @@ func (q *Queries) ListSkillFilesBySkillIDs(ctx context.Context, skillIds []pgtyp
 	return items, nil
 }
 
+const listSkillRoleNamesByWorkspace = `-- name: ListSkillRoleNamesByWorkspace :many
+SELECT ars.skill_id, r.name
+FROM agent_role_skill ars
+JOIN agent_role r ON r.id = ars.role_id
+JOIN skill s ON s.id = ars.skill_id
+WHERE s.workspace_id = $1 OR s.workspace_id IS NULL
+ORDER BY r.name ASC
+`
+
+type ListSkillRoleNamesByWorkspaceRow struct {
+	SkillID pgtype.UUID `json:"skill_id"`
+	Name    string      `json:"name"`
+}
+
+// Which roles grant each skill visible in this workspace, for the skills list's
+// role column. Roles are platform-level, so every role that carries the skill
+// is reported; the workspace filter only limits which skills are asked about.
+func (q *Queries) ListSkillRoleNamesByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]ListSkillRoleNamesByWorkspaceRow, error) {
+	rows, err := q.db.Query(ctx, listSkillRoleNamesByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSkillRoleNamesByWorkspaceRow{}
+	for rows.Next() {
+		var i ListSkillRoleNamesByWorkspaceRow
+		if err := rows.Scan(&i.SkillID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSkillSummariesByWorkspace = `-- name: ListSkillSummariesByWorkspace :many
 SELECT id, workspace_id, name, description, config, created_by, created_at, updated_at
 FROM skill

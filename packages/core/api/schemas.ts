@@ -3633,6 +3633,8 @@ export const SkillSummarySchema = z.object({
   // whole skill (or the list it lives in). Older backends omit it; the
   // filter treats an empty array as "no labels".
   labels: z.array(LabelSchema).catch([]),
+  // Roles that grant this skill; filled by the workspace skills list.
+  role_names: z.array(z.string()).optional().default([]),
 }).loose();
 
 export const EMPTY_SKILL_SUMMARY: SkillSummary = {

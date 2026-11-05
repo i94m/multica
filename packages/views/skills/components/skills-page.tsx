@@ -425,6 +425,19 @@ export default function SkillsPage() {
         cell: (row) => <UsedByCell agents={row.agents} />,
       },
       {
+        key: "role",
+        header: t(($) => $.table.role),
+        width: 152,
+        hideable: true,
+        cell: (row) => (
+          <span className="block min-w-0 truncate">
+            {row.skill.role_names?.length
+              ? row.skill.role_names.join(", ")
+              : t(($) => $.table.role_none)}
+          </span>
+        ),
+      },
+      {
         key: "source",
         header: t(($) => $.table.source),
         width: 152,

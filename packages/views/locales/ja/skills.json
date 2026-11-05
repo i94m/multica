@@ -60,13 +60,15 @@
     "source_runtime_unknown": "ランタイムから",
     "source_clawhub": "ClawHub から",
     "source_skills_sh": "Skills.sh から",
-    "source_github": "GitHub から"
+    "source_github": "GitHub から",
+    "role": "ロール",
+    "role_none": "ロールなし"
   },
   "actions": {
     "row_menu": "操作",
     "add_to_agent": "エージェントに追加",
-    "set_global": "グローバルスキルに設定",
-    "move_to_workspace": "現在のワークスペースに移動",
+    "set_global": "グローバルに設定",
+    "move_to_workspace": "グローバルを解除",
     "global_dialog_title": "このスキルをグローバルにしますか？",
     "global_dialog_description": "「{{name}}」はすべてのワークスペースで利用できるようになります。すべてのメンバーがエージェントに追加できますが、編集できるのはワークスペースの所有者と管理者だけです。",
     "global_dialog_warning": "すべてのワークスペースに影響します。後でワークスペースに戻すことができます。",
@@ -105,7 +107,10 @@
     "cancel": "キャンセル",
     "add_confirm": "追加（{{num}}）",
     "adding": "追加中...",
-    "added_multi_toast_other": "{{count}} 件のエージェントに追加しました"
+    "added_multi_toast_other": "{{count}} 件のエージェントに追加しました",
+    "delete_global_blocked": "グローバル解除後に削除できます",
+    "scope_updated_toast": "{{count}} 件のスキルのグローバル状態を更新しました",
+    "scope_update_failed_toast": "グローバル状態を更新できませんでした"
   },
   "toolbar": {
     "section_usage": "使用状況",

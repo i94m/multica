@@ -626,6 +626,12 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
 
   const handleDelete = async () => {
     if (!skill) return;
+    // Global skills are the shared library: cancel the global scope first.
+    if (!skill.workspace_id) {
+      toast.error(t(($) => $.actions.delete_global_blocked));
+      setConfirmDelete(false);
+      return;
+    }
     setDeleting(true);
     try {
       await api.deleteSkill(skill.id);
@@ -838,6 +844,12 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
+                disabled={skill.scope === "global"}
+                title={
+                  skill.scope === "global"
+                    ? t(($) => $.actions.delete_global_blocked)
+                    : undefined
+                }
                 onClick={() => setConfirmDelete(true)}
               >
                 <Trash2 />

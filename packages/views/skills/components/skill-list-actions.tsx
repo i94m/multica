@@ -697,6 +697,12 @@ export function SkillRowActions({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
+              disabled={row.skill.scope === "global"}
+              title={
+                row.skill.scope === "global"
+                  ? t(($) => $.actions.delete_global_blocked)
+                  : undefined
+              }
               onClick={() => setDeleteOpen(true)}
             >
               <Trash2 className="size-3.5" />
@@ -748,14 +754,53 @@ export function SkillBatchToolbar({
   onClear: () => void;
 }) {
   const { t } = useT("skills");
+  const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [scoping, setScoping] = useState(false);
 
-  const allDeletable = rows.every((r) => r.canEdit);
+  // A global skill is the shared library; it has to leave the global scope
+  // before it can be deleted, so it never counts as deletable here.
+  const allDeletable = rows.every(
+    (r) => r.canEdit && r.skill.scope !== "global",
+  );
   const updatable = rows.filter(
     (r) => r.canEdit && isRefreshableOrigin(readOrigin(r.skill)),
   );
+  const globalizable = rows.filter(
+    (r) => r.canEdit && r.skill.scope !== "global",
+  );
+  const unglobalizable = rows.filter(
+    (r) => r.canEdit && r.skill.scope === "global",
+  );
+
+  const changeScope = async (
+    scope: "global" | "workspace",
+    targets: SkillRow[],
+  ) => {
+    if (targets.length === 0) return;
+    setScoping(true);
+    try {
+      for (const row of targets) {
+        await api.setSkillScope(row.skill.id, scope);
+      }
+      await qc.invalidateQueries({ queryKey: workspaceKeys.skills(ctx.wsId) });
+      await qc.invalidateQueries({ queryKey: workspaceKeys.agents(ctx.wsId) });
+      toast.success(
+        t(($) => $.actions.scope_updated_toast, { count: targets.length }),
+      );
+      onClear();
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : t(($) => $.actions.scope_update_failed_toast),
+      );
+    } finally {
+      setScoping(false);
+    }
+  };
 
   const updateButton = (
     <Button
@@ -792,6 +837,30 @@ export function SkillBatchToolbar({
         <Button variant="ghost" size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="mr-1 size-3.5" />
           {t(($) => $.actions.add_to_agent)}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={
+            !ctx.isAdmin || scoping || globalizable.length === 0
+          }
+          onClick={() => void changeScope("global", globalizable)}
+        >
+          <Globe className="mr-1 size-3.5" />
+          {t(($) => $.actions.set_global)}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={
+            !ctx.isAdmin || scoping || unglobalizable.length === 0
+          }
+          onClick={() => void changeScope("workspace", unglobalizable)}
+        >
+          <Globe className="mr-1 size-3.5" />
+          {t(($) => $.actions.move_to_workspace)}
         </Button>
 
         {updatable.length > 0 ? (

@@ -60,13 +60,15 @@
     "source_runtime_unknown": "Depuis un runtime",
     "source_clawhub": "Depuis ClawHub",
     "source_skills_sh": "Depuis Skills.sh",
-    "source_github": "Depuis GitHub"
+    "source_github": "Depuis GitHub",
+    "role": "Rôle",
+    "role_none": "Aucun rôle"
   },
   "actions": {
     "row_menu": "Actions",
     "add_to_agent": "Ajouter à un agent",
-    "set_global": "Définir comme compétence globale",
-    "move_to_workspace": "Déplacer vers cet espace de travail",
+    "set_global": "Définir comme globale",
+    "move_to_workspace": "Annuler le global",
     "global_dialog_title": "Rendre cette compétence globale ?",
     "global_dialog_description": "« {{name}} » sera disponible dans tous les espaces de travail. Tous les membres pourront l’ajouter à leurs agents ; seuls les propriétaires et administrateurs d’espace de travail pourront la modifier.",
     "global_dialog_warning": "Cette action concerne tous les espaces de travail. Vous pourrez ensuite la déplacer vers un espace de travail.",
@@ -112,7 +114,10 @@
     "add_confirm": "Ajouter ({{num}})",
     "adding": "Ajout...",
     "added_multi_toast_one": "Ajouté à {{count}} agent",
-    "added_multi_toast_other": "Ajouté à {{count}} agents"
+    "added_multi_toast_other": "Ajouté à {{count}} agents",
+    "delete_global_blocked": "Annulez le global avant de supprimer",
+    "scope_updated_toast": "État global mis à jour pour {{count}} compétences",
+    "scope_update_failed_toast": "Impossible de mettre à jour l'état global"
   },
   "toolbar": {
     "section_usage": "Utilisation",

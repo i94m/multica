@@ -83,6 +83,10 @@ type SkillSummaryResponse struct {
 	// always sets a non-nil slice (empty when none). Other summary
 	// producers leave this nil so the field is omitted.
 	Labels *[]LabelResponse `json:"labels,omitempty"`
+	// RoleNames lists the roles that grant this skill, filled by ListSkills so
+	// the skills table can show the association without an N+1 lookup. Empty
+	// (omitted) when no role carries the skill.
+	RoleNames []string `json:"role_names,omitempty"`
 }
 
 // AgentSkillSummary is the still-narrower shape used for skills embedded in
@@ -372,6 +376,7 @@ func (h *Handler) ListSkills(w http.ResponseWriter, r *http.Request) {
 		ids[i] = s.ID
 	}
 	labelsMap := h.labelsBySkill(r.Context(), wsUUID, ids)
+	rolesMap := h.roleNamesBySkill(r.Context(), wsUUID)
 
 	resp := make([]SkillSummaryResponse, len(skills))
 	for i, s := range skills {
@@ -383,9 +388,27 @@ func (h *Handler) ListSkills(w http.ResponseWriter, r *http.Request) {
 		// append(nil, xs...) keeps a nil header when xs is empty.
 		labels := append([]LabelResponse{}, labelsMap[resp[i].ID]...)
 		resp[i].Labels = &labels
+		resp[i].RoleNames = rolesMap[resp[i].ID]
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// roleNamesBySkill maps skill ID to the roles that grant it. Role display is
+// non-critical for the list, so a read failure degrades to an empty map rather
+// than failing the skills endpoint.
+func (h *Handler) roleNamesBySkill(ctx context.Context, wsUUID pgtype.UUID) map[string][]string {
+	out := map[string][]string{}
+	rows, err := h.Queries.ListSkillRoleNamesByWorkspace(ctx, wsUUID)
+	if err != nil {
+		slog.Warn("ListSkillRoleNamesByWorkspace failed", "error", err)
+		return out
+	}
+	for _, row := range rows {
+		id := uuidToString(row.SkillID)
+		out[id] = append(out[id], row.Name)
+	}
+	return out
 }
 
 // labelsBySkill bulk-loads labels for the given skill IDs and returns a map
@@ -743,6 +766,13 @@ func (h *Handler) DeleteSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !h.canManageSkill(w, r, skill) {
+		return
+	}
+	// A global skill is the platform's shared library: it must be moved back to
+	// a workspace before it can be deleted, so one tenant cannot remove a skill
+	// every workspace may be relying on. Enforced for platform admins too.
+	if !skill.WorkspaceID.Valid {
+		writeError(w, http.StatusConflict, "a global skill cannot be deleted; move it back to a workspace first")
 		return
 	}
 

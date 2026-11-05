@@ -60,13 +60,15 @@
     "source_runtime_unknown": "From a runtime",
     "source_clawhub": "From ClawHub",
     "source_skills_sh": "From Skills.sh",
-    "source_github": "From GitHub"
+    "source_github": "From GitHub",
+    "role": "Role",
+    "role_none": "No role"
   },
   "actions": {
     "row_menu": "Actions",
     "add_to_agent": "Add to agent",
-    "set_global": "Set as global skill",
-    "move_to_workspace": "Move to this workspace",
+    "set_global": "Set as global",
+    "move_to_workspace": "Cancel global",
     "global_dialog_title": "Make this skill global?",
     "global_dialog_description": "\"{{name}}\" will be available to every workspace. All members can add it to agents; only workspace owners and admins can edit it.",
     "global_dialog_warning": "This affects every workspace. You can move the skill back to a workspace later.",
@@ -112,7 +114,10 @@
     "add_confirm": "Add ({{num}})",
     "adding": "Adding...",
     "added_multi_toast_one": "Added to {{count}} agent",
-    "added_multi_toast_other": "Added to {{count}} agents"
+    "added_multi_toast_other": "Added to {{count}} agents",
+    "delete_global_blocked": "Cancel global before deleting",
+    "scope_updated_toast": "Updated the global state of {{count}} skills",
+    "scope_update_failed_toast": "Could not update the global state"
   },
   "toolbar": {
     "section_usage": "Usage",

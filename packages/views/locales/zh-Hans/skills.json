@@ -60,13 +60,15 @@
     "source_runtime_unknown": "来自某个运行时",
     "source_clawhub": "来自 ClawHub",
     "source_skills_sh": "来自 Skills.sh",
-    "source_github": "来自 GitHub"
+    "source_github": "来自 GitHub",
+    "role": "角色",
+    "role_none": "未关联角色"
   },
   "actions": {
     "row_menu": "操作",
     "add_to_agent": "添加到智能体",
-    "set_global": "设置为全局 Skill",
-    "move_to_workspace": "移动到当前工作区",
+    "set_global": "设为全局",
+    "move_to_workspace": "取消全局技能",
     "global_dialog_title": "将此 Skill 设置为全局？",
     "global_dialog_description": "“{{name}}”将对所有工作区可见。所有成员都可以将其添加到智能体，只有工作区所有者和管理员可以编辑。",
     "global_dialog_warning": "此操作会影响所有工作区。之后可以将 Skill 移回某个工作区。",
@@ -105,7 +107,10 @@
     "cancel": "取消",
     "add_confirm": "添加（{{num}}）",
     "adding": "添加中...",
-    "added_multi_toast_other": "已添加到 {{count}} 个智能体"
+    "added_multi_toast_other": "已添加到 {{count}} 个智能体",
+    "delete_global_blocked": "取消全局后才能删除",
+    "scope_updated_toast": "已更新 {{count}} 个技能的全局状态",
+    "scope_update_failed_toast": "无法更新全局状态"
   },
   "toolbar": {
     "section_usage": "使用状态",

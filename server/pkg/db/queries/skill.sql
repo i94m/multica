@@ -253,6 +253,17 @@ JOIN agent_role_skill ars ON ars.skill_id = s.id
 WHERE ars.role_id = $1
 ORDER BY ars.position ASC, s.name ASC;
 
+-- name: ListSkillRoleNamesByWorkspace :many
+-- Which roles grant each skill visible in this workspace, for the skills list's
+-- role column. Roles are platform-level, so every role that carries the skill
+-- is reported; the workspace filter only limits which skills are asked about.
+SELECT ars.skill_id, r.name
+FROM agent_role_skill ars
+JOIN agent_role r ON r.id = ars.role_id
+JOIN skill s ON s.id = ars.skill_id
+WHERE s.workspace_id = @workspace_id OR s.workspace_id IS NULL
+ORDER BY r.name ASC;
+
 -- name: ListRoleSkillsByAgent :many
 -- The role layer of an agent's effective skill set, resolved through
 -- agent.role_id. Names are returned as-is; claim-time merging applies the
