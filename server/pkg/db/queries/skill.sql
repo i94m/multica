@@ -57,7 +57,13 @@ RETURNING *;
 
 -- name: DeleteSkill :exec
 -- Defense-in-depth: workspace_id is a SQL-layer tenant guard. See DeleteIssue.
-DELETE FROM skill WHERE id = $1 AND workspace_id = $2;
+-- skill_version has no FK, so the skill's history is removed in the same
+-- statement.
+WITH deleted_versions AS (
+    DELETE FROM skill_version
+    WHERE skill_version.skill_id = $1 AND skill_version.workspace_id = $2
+)
+DELETE FROM skill WHERE skill.id = $1 AND skill.workspace_id = $2;
 
 -- name: DeleteGlobalSkill :exec
 DELETE FROM skill WHERE id = $1 AND workspace_id IS NULL;
@@ -333,3 +339,40 @@ LEFT JOIN agent_skill ask ON ask.agent_id = a.id AND ask.skill_id = s.id
 LEFT JOIN agent_role_skill ars ON ars.role_id = a.role_id AND ars.skill_id = s.id
 WHERE a.workspace_id = $1
 ORDER BY s.name ASC;
+
+-- Skill versions
+
+-- name: LockSkillForVersioning :one
+-- Serializes version-number allocation for one skill. Every content write
+-- takes this row lock inside its transaction before reading the latest
+-- version, so concurrent writers cannot allocate the same number.
+SELECT * FROM skill WHERE id = $1 FOR UPDATE;
+
+-- name: GetLatestSkillVersion :one
+SELECT version, content_hash FROM skill_version
+WHERE skill_id = $1
+ORDER BY version DESC
+LIMIT 1;
+
+-- name: CreateSkillVersion :one
+INSERT INTO skill_version (
+    workspace_id, skill_id, version, name, description, content, files,
+    content_hash, source, restored_from_version, created_by, created_at
+)
+VALUES (
+    @workspace_id, @skill_id, @version, @name, @description, @content, @files,
+    @content_hash, @source, sqlc.narg('restored_from_version'), sqlc.narg('created_by'),
+    COALESCE(sqlc.narg('created_at')::timestamptz, now())
+)
+RETURNING id, workspace_id, skill_id, version, name, source, restored_from_version, created_by, created_at;
+
+-- name: ListSkillVersions :many
+-- Metadata only: snapshots can be large, and the list never shows bodies.
+SELECT id, workspace_id, skill_id, version, name, source, restored_from_version, created_by, created_at
+FROM skill_version
+WHERE skill_id = $1 AND workspace_id = $2
+ORDER BY version DESC;
+
+-- name: GetSkillVersion :one
+SELECT * FROM skill_version
+WHERE skill_id = $1 AND workspace_id = $2 AND version = $3;
