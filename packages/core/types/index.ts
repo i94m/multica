@@ -204,6 +204,9 @@ export type { StorageAdapter } from "./storage";
 export type {
   Project,
   ProjectStatus,
+  ProjectVisibility,
+  ProjectMember,
+  ListProjectMembersResponse,
   ProjectPriority,
   CreateProjectRequest,
   UpdateProjectRequest,
@@ -238,6 +241,12 @@ export type {
   GitHubConnectResponse,
 } from "./github";
 export type {
+  IssueEnvironment,
+  IssueEnvironmentSource,
+  IssueEnvironmentState,
+  IssueEnvironmentsResponse,
+} from "./environment";
+export type {
   VCSProvider,
   VCSConnection,
   ListVCSConnectionsResponse,
@@ -256,6 +265,29 @@ export type {
   ComposioConnection,
   ComposioConnectInitResponse,
 } from "./composio";
+export type {
+  AppAccountScope,
+  AppAccessLevel,
+  AppActionClass,
+  AppActionPolicy,
+  AppCatalogMode,
+  AppConnection,
+  AgentApp,
+  AppsOverview,
+  AppCatalogEntry,
+  AppCatalogResponse,
+  AppRule,
+  AppTool,
+  AppToolCall,
+  AppCallOutcome,
+  IssueAppCall,
+  TeamAppImpact,
+  AppRequestStatus,
+  AppRequest,
+  AppRequestList,
+  UpdateAgentAppsRequest,
+  AppRequestChangedPayload,
+} from "./connected-apps";
 export type {
   SlackInstallation,
   ListSlackInstallationsResponse,
