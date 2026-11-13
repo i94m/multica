@@ -43,6 +43,10 @@ export type {
   AgentInvocationTargetInput,
   AgentTask,
   TaskUsage,
+  ContextReceipt,
+  ContextReceiptLoad,
+  ContextReceiptSource,
+  TaskContextReceiptResponse,
   TaskAttribution,
   AttributionUser,
   TaskCancellationActor,
@@ -232,6 +236,8 @@ export type {
   GitHubPullRequestMergeStateStatus,
   GitHubPullRequestState,
   IssuePullRequestsResponse,
+  IssuePullRequestSummary,
+  IssuePullRequestSummariesResponse,
   PRAutoComplete,
   PRAutoCompleteState,
   PullRequestLinkSource,
@@ -241,10 +247,18 @@ export type {
   GitHubConnectResponse,
 } from "./github";
 export type {
+  DeclaredEnvironment,
   IssueEnvironment,
+  IssueEnvironmentAction,
+  IssueEnvironmentActionRecord,
+  IssueEnvironmentActionStatus,
+  IssueEnvironmentCommand,
+  IssueEnvironmentConfig,
   IssueEnvironmentSource,
+  IssueEnvironmentKind,
   IssueEnvironmentState,
   IssueEnvironmentsResponse,
+  StartIssueEnvironmentRequest,
 } from "./environment";
 export type {
   VCSProvider,
