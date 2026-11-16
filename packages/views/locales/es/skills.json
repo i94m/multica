@@ -51,7 +51,10 @@
     "source_runtime_unknown": "De un runtime",
     "source_clawhub": "De ClawHub",
     "source_skills_sh": "De Skills.sh",
-    "source_github": "De GitHub"
+    "source_github": "De GitHub",
+    "global": "Global",
+    "role": "Rol",
+    "role_none": "Sin rol"
   },
   "actions": {
     "row_menu": "Acciones",
@@ -90,7 +93,23 @@
     "add_confirm": "Añadir ({{num}})",
     "adding": "Añadiendo...",
     "added_multi_toast_one": "Añadida a {{count}} agente",
-    "added_multi_toast_other": "Añadida a {{count}} agentes"
+    "added_multi_toast_other": "Añadida a {{count}} agentes",
+    "set_global": "Hacer global",
+    "move_to_workspace": "Quitar de global",
+    "global_dialog_title": "¿Hacer global esta skill?",
+    "global_dialog_description": "«{{name}}» estará disponible en todos los espacios de trabajo. Cualquier miembro podrá añadirla a agentes; solo los propietarios y administradores de espacios de trabajo podrán editarla.",
+    "global_dialog_warning": "Esto afecta a todos los espacios de trabajo. Más adelante puedes devolver la skill a un espacio de trabajo.",
+    "global_dialog_confirm": "Hacer global",
+    "move_dialog_title": "¿Mover esta skill al espacio de trabajo actual?",
+    "move_dialog_description": "«{{name}}» dejará de ser global y pasará a ser una skill de este espacio de trabajo.",
+    "move_dialog_confirm": "Mover al espacio de trabajo",
+    "globalized_toast": "La skill ahora es global",
+    "moved_to_workspace_toast": "Skill movida a este espacio de trabajo",
+    "scope_failed_toast": "No se pudo cambiar el ámbito de la skill",
+    "saving_scope": "Guardando…",
+    "delete_global_blocked": "Quita el estado global antes de eliminar",
+    "scope_updated_toast": "Se actualizó el estado global de {{count}} skills",
+    "scope_update_failed_toast": "No se pudo actualizar el estado global"
   },
   "toolbar": {
     "section_usage": "Uso",

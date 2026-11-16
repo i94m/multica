@@ -76,7 +76,9 @@
     "model": "Modelo",
     "created": "Creado",
     "owner": "Propietario",
-    "access": "Acceso"
+    "access": "Acceso",
+    "role": "Rol",
+    "no_role": "Sin rol"
   },
   "row": {
     "you": "Tú",
@@ -199,7 +201,9 @@
     "edit_description_title": "Editar descripción",
     "description_placeholder": "¿Qué hace este agente?",
     "cancel": "Cancelar",
-    "qoder_execution_note": "El modelo, las herramientas y las skills se configuran en el agente desde Qoder Cloud Agents."
+    "qoder_execution_note": "El modelo, las herramientas y las skills se configuran en el agente desde Qoder Cloud Agents.",
+    "save": "Guardar",
+    "section_role_instructions": "Rol e instrucciones"
   },
   "overview": {
     "attention_title": "Ejecuciones que requieren atención",
@@ -731,7 +735,12 @@
       "add_dialog_confirm_one": "Añadir {{count}} skill",
       "add_dialog_confirm_other": "Añadir {{count}} skills",
       "add_dialog_cancel": "Cancelar",
-      "add_failed_toast": "No se ha podido añadir la skill"
+      "add_failed_toast": "No se ha podido añadir la skill",
+      "global_badge": "Global",
+      "global_hint": "Se aplica automáticamente a todos los agentes",
+      "global_notice": "Las skills globales se aplican automáticamente a todos los agentes y no se pueden desactivar aquí.",
+      "role_badge": "Incluida en el rol",
+      "role_hint": "Incluida en el rol de este agente. Para cambiar este conjunto, cambia el rol en la consola de la plataforma."
     },
     "integrations": {
       "members_note": "Consulta y gestiona los canales de mensajería en la página del agente."
@@ -1091,5 +1100,57 @@
       "comment": "Corregido: las tarjetas de precios se apilan en una columna por debajo de 375 px. El PR está abierto y los tests pasan.",
       "step_read": "Leer {{file}}"
     }
+  },
+  "role_select": {
+    "label": "Rol",
+    "hint": "Al elegir un rol, su prompt se carga automáticamente en cada ejecución.",
+    "none": "Sin rol",
+    "view_instructions": "Ver instrucciones del rol",
+    "no_instructions": "Este rol no tiene instrucciones.",
+    "skills_label": "Skills de este rol",
+    "skills_empty": "Este rol no otorga skills.",
+    "supplement_hint": "Tu prompt se añade después del prompt del rol; úsalo para lo específico de este agente."
+  },
+  "roles": {
+    "title": "Roles",
+    "tagline": "Prompts compartidos que varios agentes pueden reutilizar.",
+    "new_role": "Nuevo rol",
+    "loading": "Cargando roles…",
+    "empty_title": "Aún no hay roles",
+    "empty_description": "Crea un rol una vez y luego selecciónalo en cualquier agente.",
+    "create_title": "Nuevo rol",
+    "edit_title": "Editar rol",
+    "name": "Nombre",
+    "name_placeholder": "p. ej., Desarrollador frontend",
+    "scope": "Ámbito",
+    "scope_workspace": "Este espacio de trabajo",
+    "scope_global": "Todos los espacios de trabajo",
+    "scope_hint": "Los roles globales están disponibles en todos los espacios de trabajo. Los roles de espacio de trabajo solo aquí.",
+    "scope_change_warning": "Al guardar se quitará este rol de los demás espacios de trabajo, incluidas sus vinculaciones de agentes.",
+    "description": "Descripción",
+    "description_placeholder": "Resumen breve que se muestra al elegir el rol",
+    "instructions": "Instrucciones del rol",
+    "instructions_hint": "Estas instrucciones se añaden antes de las instrucciones propias del agente en cada ejecución.",
+    "global_badge": "Global",
+    "agent_count": "Agentes que usan este rol: {{count}}",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "delete_title": "¿Eliminar el rol?",
+    "delete_description": "«{{name}}» está asignado a agentes: {{count}}. Conservan sus propias instrucciones y dejarán de heredar este rol.",
+    "delete_confirm": "Eliminar rol",
+    "saved": "Rol guardado",
+    "deleted": "Rol eliminado",
+    "save_failed": "No se pudo guardar el rol",
+    "delete_failed": "No se pudo eliminar el rol",
+    "name_required": "El nombre es obligatorio",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "skills_button": "Skills",
+    "skills_dialog_title": "Skills que otorga este rol",
+    "skills_dialog_hint": "Cada agente vinculado a este rol recibe estas skills automáticamente. No se pueden desactivar por agente.",
+    "skills_dialog_empty": "Aún no hay skills disponibles.",
+    "skills_saved": "Skills del rol guardadas",
+    "skills_save_failed": "No se pudieron guardar las skills del rol"
   }
 }

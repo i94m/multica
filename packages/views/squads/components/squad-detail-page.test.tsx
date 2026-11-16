@@ -241,7 +241,7 @@ describe("SquadDetailPage", () => {
 
     await user.click(screen.getByRole("button", { name: "More actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Create Agent" }));
-    expect(push).toHaveBeenCalledWith("/acme/agents/new?squad=sq-1");
+    expect(push).toHaveBeenCalledWith("/acme/agents/new/manual?squad=sq-1");
 
     await user.click(screen.getByRole("button", { name: "More actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Archive" }));
