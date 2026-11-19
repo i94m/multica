@@ -187,7 +187,7 @@ function SortHead({
         className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
       >
         {label}
-        <ArrowUpDown className={`size-3 ${sort === column ? "text-foreground" : "text-muted-foreground/60"}`} />
+        <ArrowUpDown className={`size-3 ${sort === column ? "text-foreground" : "text-faint-foreground"}`} />
         <span className="sr-only">{order}</span>
       </button>
     </TableHead>
