@@ -198,6 +198,8 @@ export const adminUsageTotalsSchema = z.object({
   cost_usd_ticks: z.number().default(0),
   cost_usd: z.number().default(0),
   task_count: z.number().default(0),
+  active_workspaces: z.number().default(0),
+  active_agents: z.number().default(0),
 });
 
 const emptyCounts = {
@@ -221,6 +223,8 @@ const emptyUsageTotals = {
   cost_usd_ticks: 0,
   cost_usd: 0,
   task_count: 0,
+  active_workspaces: 0,
+  active_agents: 0,
 };
 
 export const adminOverviewSchema = z.object({
@@ -254,9 +258,14 @@ export const adminUsageRowSchema = z.object({
   model: z.string().default(""),
   input_tokens: z.number().default(0),
   output_tokens: z.number().default(0),
+  cache_read_tokens: z.number().default(0),
+  cache_write_tokens: z.number().default(0),
   cost_usd_ticks: z.number().default(0),
   cost_usd: z.number().default(0),
-  task_count: nullableNumber,
+  task_count: z.number().default(0),
+  agent_count: z.number().default(0),
+  duration_seconds: z.number().default(0),
+  last_active_at: z.string().default(""),
 });
 
 export const adminUsageSchema = z.object({
@@ -266,6 +275,48 @@ export const adminUsageSchema = z.object({
   totals: adminUsageTotalsSchema.default(emptyUsageTotals),
   rows: z.array(adminUsageRowSchema).default([]),
 });
+
+export const adminUsageTrendSchema = z.object({
+  bucket: z.string().default("day"),
+  from: z.string().default(""),
+  to: z.string().default(""),
+  points: z
+    .array(
+      z.object({
+        bucket_start: z.string().default(""),
+        workspace_id: z.string().default(""),
+        workspace_name: z.string().default(""),
+        input_tokens: z.number().default(0),
+        output_tokens: z.number().default(0),
+        cache_read_tokens: z.number().default(0),
+        task_count: z.number().default(0),
+      }),
+    )
+    .default([]),
+});
+
+export const emptyUsageTrend = { bucket: "day", from: "", to: "", points: [] };
+
+export const adminUsageMatrixSchema = z.object({
+  from: z.string().default(""),
+  to: z.string().default(""),
+  cells: z
+    .array(
+      z.object({
+        workspace_id: z.string().default(""),
+        workspace_name: z.string().default(""),
+        provider: z.string().default(""),
+        model: z.string().default(""),
+        input_tokens: z.number().default(0),
+        output_tokens: z.number().default(0),
+        cache_read_tokens: z.number().default(0),
+        task_count: z.number().default(0),
+      }),
+    )
+    .default([]),
+});
+
+export const emptyUsageMatrix = { from: "", to: "", cells: [] };
 
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export type AdminMembership = z.infer<typeof adminMembershipSchema>;
@@ -288,3 +339,6 @@ export type AdminRuntimePage = z.infer<typeof adminRuntimePageSchema>;
 export type AdminOverview = z.infer<typeof adminOverviewSchema>;
 export type AdminUsage = z.infer<typeof adminUsageSchema>;
 export type AdminUsageRow = z.infer<typeof adminUsageRowSchema>;
+export type AdminUsageTotals = z.infer<typeof adminUsageTotalsSchema>;
+export type AdminUsageTrend = z.infer<typeof adminUsageTrendSchema>;
+export type AdminUsageMatrix = z.infer<typeof adminUsageMatrixSchema>;

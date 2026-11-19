@@ -528,68 +528,153 @@ ORDER BY 1;
 
 -- name: AdminUsageTotals :one
 SELECT
-    coalesce(sum(input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(cache_read_tokens), 0)::bigint AS cache_read_tokens,
-    coalesce(sum(cache_write_tokens), 0)::bigint AS cache_write_tokens,
-    coalesce(sum(cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
-    coalesce(sum(task_count), 0)::bigint AS task_count
+    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(h.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(h.cache_write_tokens), 0)::bigint AS cache_write_tokens,
+    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
+    coalesce(sum(h.task_count), 0)::bigint AS task_count,
+    count(DISTINCT h.workspace_id)::bigint AS active_workspaces,
+    count(DISTINCT h.agent_id)::bigint AS active_agents
 FROM task_usage_hourly h
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+WHERE h.bucket_hour >= sqlc.arg('from_at')::timestamptz
+  AND h.bucket_hour < sqlc.arg('to_at')::timestamptz
   -- Personal workspaces hold a handful of issues; they would otherwise skew
   -- cross-workspace usage totals. Product rule: only count workspaces with
   -- at least 5 issues.
   AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= sqlc.arg('min_issues')::bigint;
+      >= sqlc.arg('min_issues')::bigint
+  AND (sqlc.narg('workspace_id')::uuid IS NULL OR h.workspace_id = sqlc.narg('workspace_id')::uuid)
+  AND (sqlc.arg('provider')::text = '' OR h.provider = sqlc.arg('provider')::text)
+  AND (sqlc.arg('model')::text = '' OR h.model = sqlc.arg('model')::text);
 
--- name: ListAdminUsageByWorkspace :many
+-- name: ListAdminUsageByDimension :many
+-- One aggregate query behind every ranking: the dimension switch groups by a
+-- CASE key instead of repeating the same filters and sums six times.
+WITH filtered AS (
+    SELECT h.*
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= sqlc.arg('from_at')::timestamptz
+      AND h.bucket_hour < sqlc.arg('to_at')::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= sqlc.arg('min_issues')::bigint
+      AND (sqlc.narg('workspace_id')::uuid IS NULL OR h.workspace_id = sqlc.narg('workspace_id')::uuid)
+      AND (sqlc.arg('provider')::text = '' OR h.provider = sqlc.arg('provider')::text)
+      AND (sqlc.arg('model')::text = '' OR h.model = sqlc.arg('model')::text)
+),
+-- Wall-clock time the agents actually spent running tasks that finished inside
+-- the same window. Tasks carry no workspace column, so the agent join supplies
+-- it; per-agent rows keep their own bucket and workspace rows roll up.
+durations AS (
+    SELECT a.workspace_id, q.agent_id,
+           sum(extract(epoch FROM (q.completed_at - q.started_at)))::bigint AS seconds
+    FROM agent_task_queue q
+    JOIN agent a ON a.id = q.agent_id
+    WHERE q.started_at IS NOT NULL
+      AND q.completed_at IS NOT NULL
+      AND q.completed_at >= sqlc.arg('from_at')::timestamptz
+      AND q.completed_at < sqlc.arg('to_at')::timestamptz
+    GROUP BY 1, 2
+),
+workspace_durations AS (
+    SELECT workspace_id, sum(seconds)::bigint AS seconds
+    FROM durations
+    GROUP BY 1
+)
 SELECT
-    h.workspace_id,
+    CASE sqlc.arg('group_by')::text
+        WHEN 'agent' THEN f.agent_id::text
+        WHEN 'project' THEN coalesce(f.project_id::text, '')
+        WHEN 'runtime' THEN f.runtime_id::text
+        WHEN 'provider' THEN f.provider
+        WHEN 'model' THEN f.provider || ' / ' || f.model
+        ELSE f.workspace_id::text
+    END AS id,
+    CASE sqlc.arg('group_by')::text
+        WHEN 'agent' THEN coalesce(a.name, '')
+        WHEN 'project' THEN coalesce(p.title, '')
+        WHEN 'runtime' THEN coalesce(rt.name, '')
+        WHEN 'provider' THEN f.provider
+        WHEN 'model' THEN f.model
+        ELSE w.name
+    END::text AS name,
+    max(f.workspace_id::text)::text AS workspace_id,
+    max(w.name)::text AS workspace_name,
+    max(w.slug)::text AS workspace_slug,
+    max(CASE WHEN sqlc.arg('group_by')::text = 'model' THEN f.provider ELSE '' END)::text AS provider,
+    max(CASE WHEN sqlc.arg('group_by')::text = 'model' THEN f.model ELSE '' END)::text AS model,
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.cache_write_tokens), 0)::bigint AS cache_write_tokens,
+    coalesce(sum(f.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count,
+    count(DISTINCT f.agent_id)::bigint AS agent_count,
+    max(f.bucket_hour)::timestamptz AS last_bucket,
+    (CASE sqlc.arg('group_by')::text
+        WHEN 'workspace' THEN max(coalesce(wd.seconds, 0))
+        WHEN 'agent' THEN max(coalesce(d.seconds, 0))
+        ELSE 0
+    END)::bigint AS duration_seconds
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+LEFT JOIN agent a ON a.id = f.agent_id
+LEFT JOIN project p ON p.id = f.project_id
+LEFT JOIN agent_runtime rt ON rt.id = f.runtime_id
+LEFT JOIN durations d ON d.agent_id = f.agent_id AND d.workspace_id = f.workspace_id
+LEFT JOIN workspace_durations wd ON wd.workspace_id = f.workspace_id
+GROUP BY 1, 2
+ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC, 2 ASC
+LIMIT sqlc.arg('limit')::int;
+
+-- name: ListAdminUsageTrend :many
+WITH filtered AS (
+    SELECT h.*
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= sqlc.arg('from_at')::timestamptz
+      AND h.bucket_hour < sqlc.arg('to_at')::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= sqlc.arg('min_issues')::bigint
+      AND (sqlc.narg('workspace_id')::uuid IS NULL OR h.workspace_id = sqlc.narg('workspace_id')::uuid)
+      AND (sqlc.arg('provider')::text = '' OR h.provider = sqlc.arg('provider')::text)
+      AND (sqlc.arg('model')::text = '' OR h.model = sqlc.arg('model')::text)
+)
+SELECT
+    date_trunc(sqlc.arg('bucket')::text, f.bucket_hour)::timestamptz AS bucket_start,
+    f.workspace_id::text AS workspace_id,
     w.name AS workspace_name,
-    w.slug AS workspace_slug,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks
-FROM task_usage_hourly h
-JOIN workspace w ON w.id = h.workspace_id
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= sqlc.arg('min_issues')::bigint
-GROUP BY h.workspace_id, w.name, w.slug
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3;
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+GROUP BY 1, 2, 3
+ORDER BY 1;
 
--- name: ListAdminUsageByAgent :many
+-- name: ListAdminUsageMatrix :many
+WITH filtered AS (
+    SELECT h.*
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= sqlc.arg('from_at')::timestamptz
+      AND h.bucket_hour < sqlc.arg('to_at')::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= sqlc.arg('min_issues')::bigint
+      AND (sqlc.narg('workspace_id')::uuid IS NULL OR h.workspace_id = sqlc.narg('workspace_id')::uuid)
+      AND (sqlc.arg('provider')::text = '' OR h.provider = sqlc.arg('provider')::text)
+      AND (sqlc.arg('model')::text = '' OR h.model = sqlc.arg('model')::text)
+)
 SELECT
-    h.agent_id,
-    coalesce(a.name, '') AS agent_name,
-    h.workspace_id,
+    f.workspace_id::text AS workspace_id,
     w.name AS workspace_name,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks
-FROM task_usage_hourly h
-JOIN workspace w ON w.id = h.workspace_id
-LEFT JOIN agent a ON a.id = h.agent_id
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= sqlc.arg('min_issues')::bigint
-GROUP BY h.agent_id, a.name, h.workspace_id, w.name
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3;
-
--- name: ListAdminUsageByModel :many
-SELECT
-    h.provider,
-    h.model,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
-    coalesce(sum(h.task_count), 0)::bigint AS task_count
-FROM task_usage_hourly h
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= sqlc.arg('min_issues')::bigint
-GROUP BY h.provider, h.model
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3;
+    f.provider,
+    f.model,
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+GROUP BY 1, 2, 3, 4
+ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC
+LIMIT 200;

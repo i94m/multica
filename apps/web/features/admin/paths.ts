@@ -12,6 +12,5 @@ export const adminPaths = {
   agent: (id: string) => `/admin/agents/${encode(id)}`,
   runtimes: () => "/admin/runtimes",
   runtime: (id: string) => `/admin/runtimes/${encode(id)}`,
-  usage: () => "/admin/usage",
   roles: () => "/admin/roles",
 };

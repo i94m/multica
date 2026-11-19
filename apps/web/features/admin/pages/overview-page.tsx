@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useLocale } from "@multica/views/i18n";
+import { UsageReport } from "../components/usage-report";
 import { adminOverviewOptions } from "../queries";
 import { useAdminCopy } from "../i18n";
 import {
@@ -12,7 +13,6 @@ import {
   SectionCard,
   StatCard,
   StatusBadge,
-  formatCost,
   formatNumber,
 } from "../components/shared";
 
@@ -21,20 +21,46 @@ export default function OverviewPage() {
   const locale = useLocale();
   const overview = useQuery(adminOverviewOptions());
 
-  if (overview.isLoading) return <LoadingState label={copy.common.loading} />;
-  if (overview.isError || !overview.data) {
-    return (
-      <ErrorState
-        label={copy.common.error}
-        retryLabel={copy.common.retry}
-        onRetry={() => {
-          void overview.refetch();
-        }}
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={copy.nav.overview}
+        description={copy.subtitle}
+        actions={
+          <span className="text-caption text-muted-foreground">
+            {overview.data?.generated_at
+              ? new Date(overview.data.generated_at).toLocaleString(locale)
+              : ""}
+          </span>
+        }
       />
-    );
-  }
 
-  const { counts, usage } = overview.data;
+      <UsageReport />
+
+      {overview.isLoading ? (
+        <LoadingState label={copy.common.loading} />
+      ) : overview.isError || !overview.data ? (
+        <ErrorState
+          label={copy.common.error}
+          retryLabel={copy.common.retry}
+          onRetry={() => {
+            void overview.refetch();
+          }}
+        />
+      ) : (
+        <PlatformSection />
+      )}
+    </div>
+  );
+}
+
+function PlatformSection() {
+  const copy = useAdminCopy();
+  const locale = useLocale();
+  const overview = useQuery(adminOverviewOptions());
+  if (!overview.data) return null;
+
+  const { counts } = overview.data;
   const stats = [
     { label: copy.overview.users, value: formatNumber(counts.users, locale) },
     { label: copy.overview.workspaces, value: formatNumber(counts.workspaces, locale) },
@@ -54,16 +80,8 @@ export default function OverviewPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={copy.nav.overview}
-        description={copy.subtitle}
-        actions={
-          <span className="text-caption text-muted-foreground">
-            {overview.data.generated_at ? new Date(overview.data.generated_at).toLocaleString(locale) : ""}
-          </span>
-        }
-      />
+    <div className="space-y-4">
+      <h2 className="font-heading text-title-sm font-semibold">{copy.overview.platform}</h2>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {stats.map((stat) => (
@@ -87,28 +105,14 @@ export default function OverviewPage() {
           )}
         </SectionCard>
 
-        <SectionCard title={copy.overview.usage30d}>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <UsageFact label={copy.usage.input} value={formatNumber(usage.input_tokens, locale)} />
-            <UsageFact label={copy.usage.output} value={formatNumber(usage.output_tokens, locale)} />
-            <UsageFact
-              label={copy.usage.cacheRead}
-              value={formatNumber(usage.cache_read_tokens, locale)}
-            />
-            <UsageFact
-              label={copy.usage.cacheWrite}
-              value={formatNumber(usage.cache_write_tokens, locale)}
-            />
-            <UsageFact label={copy.usage.cost} value={formatCost(usage.cost_usd, locale)} />
-            <UsageFact label={copy.usage.tasks} value={formatNumber(usage.task_count, locale)} />
-          </dl>
-        </SectionCard>
-
         <SectionCard title={copy.overview.signups}>
           {overview.data.signups_daily.length === 0 ? (
             <EmptyState label={copy.common.noData} />
           ) : (
-            <DailyRows rows={overview.data.signups_daily.map((row) => ({ day: row.day, values: [row.count] }))} locale={locale} />
+            <DailyRows
+              rows={overview.data.signups_daily.map((row) => ({ day: row.day, values: [row.count] }))}
+              locale={locale}
+            />
           )}
         </SectionCard>
 
@@ -117,21 +121,15 @@ export default function OverviewPage() {
             <EmptyState label={copy.common.noData} />
           ) : (
             <DailyRows
-              rows={overview.data.tasks_daily.map((row) => ({ day: row.day, values: [row.completed, row.failed] }))}
+              rows={overview.data.tasks_daily.map((row) => ({
+                day: row.day,
+                values: [row.completed, row.failed],
+              }))}
               locale={locale}
             />
           )}
         </SectionCard>
       </div>
-    </div>
-  );
-}
-
-function UsageFact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="text-body font-medium tabular-nums">{value}</dd>
     </div>
   );
 }

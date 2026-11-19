@@ -162,25 +162,34 @@ func (q *Queries) AdminTasksDaily(ctx context.Context, createdAt pgtype.Timestam
 
 const adminUsageTotals = `-- name: AdminUsageTotals :one
 SELECT
-    coalesce(sum(input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(cache_read_tokens), 0)::bigint AS cache_read_tokens,
-    coalesce(sum(cache_write_tokens), 0)::bigint AS cache_write_tokens,
-    coalesce(sum(cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
-    coalesce(sum(task_count), 0)::bigint AS task_count
+    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(h.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(h.cache_write_tokens), 0)::bigint AS cache_write_tokens,
+    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
+    coalesce(sum(h.task_count), 0)::bigint AS task_count,
+    count(DISTINCT h.workspace_id)::bigint AS active_workspaces,
+    count(DISTINCT h.agent_id)::bigint AS active_agents
 FROM task_usage_hourly h
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+WHERE h.bucket_hour >= $1::timestamptz
+  AND h.bucket_hour < $2::timestamptz
   -- Personal workspaces hold a handful of issues; they would otherwise skew
   -- cross-workspace usage totals. Product rule: only count workspaces with
   -- at least 5 issues.
   AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
       >= $3::bigint
+  AND ($4::uuid IS NULL OR h.workspace_id = $4::uuid)
+  AND ($5::text = '' OR h.provider = $5::text)
+  AND ($6::text = '' OR h.model = $6::text)
 `
 
 type AdminUsageTotalsParams struct {
-	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
-	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
-	MinIssues    int64              `json:"min_issues"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	MinIssues   int64              `json:"min_issues"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Provider    string             `json:"provider"`
+	Model       string             `json:"model"`
 }
 
 type AdminUsageTotalsRow struct {
@@ -190,10 +199,19 @@ type AdminUsageTotalsRow struct {
 	CacheWriteTokens int64 `json:"cache_write_tokens"`
 	CostUsdTicks     int64 `json:"cost_usd_ticks"`
 	TaskCount        int64 `json:"task_count"`
+	ActiveWorkspaces int64 `json:"active_workspaces"`
+	ActiveAgents     int64 `json:"active_agents"`
 }
 
 func (q *Queries) AdminUsageTotals(ctx context.Context, arg AdminUsageTotalsParams) (AdminUsageTotalsRow, error) {
-	row := q.db.QueryRow(ctx, adminUsageTotals, arg.BucketHour, arg.BucketHour_2, arg.MinIssues)
+	row := q.db.QueryRow(ctx, adminUsageTotals,
+		arg.FromAt,
+		arg.ToAt,
+		arg.MinIssues,
+		arg.WorkspaceID,
+		arg.Provider,
+		arg.Model,
+	)
 	var i AdminUsageTotalsRow
 	err := row.Scan(
 		&i.InputTokens,
@@ -202,6 +220,8 @@ func (q *Queries) AdminUsageTotals(ctx context.Context, arg AdminUsageTotalsPara
 		&i.CacheWriteTokens,
 		&i.CostUsdTicks,
 		&i.TaskCount,
+		&i.ActiveWorkspaces,
+		&i.ActiveAgents,
 	)
 	return i, err
 }
@@ -1173,65 +1193,151 @@ func (q *Queries) ListAdminTasks(ctx context.Context, arg ListAdminTasksParams) 
 	return items, nil
 }
 
-const listAdminUsageByAgent = `-- name: ListAdminUsageByAgent :many
+const listAdminUsageByDimension = `-- name: ListAdminUsageByDimension :many
+WITH filtered AS (
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= $3::timestamptz
+      AND h.bucket_hour < $4::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= $5::bigint
+      AND ($6::uuid IS NULL OR h.workspace_id = $6::uuid)
+      AND ($7::text = '' OR h.provider = $7::text)
+      AND ($8::text = '' OR h.model = $8::text)
+),
+durations AS (
+    SELECT a.workspace_id, q.agent_id,
+           sum(extract(epoch FROM (q.completed_at - q.started_at)))::bigint AS seconds
+    FROM agent_task_queue q
+    JOIN agent a ON a.id = q.agent_id
+    WHERE q.started_at IS NOT NULL
+      AND q.completed_at IS NOT NULL
+      AND q.completed_at >= $3::timestamptz
+      AND q.completed_at < $4::timestamptz
+    GROUP BY 1, 2
+),
+workspace_durations AS (
+    SELECT workspace_id, sum(seconds)::bigint AS seconds
+    FROM durations
+    GROUP BY 1
+)
 SELECT
-    h.agent_id,
-    coalesce(a.name, '') AS agent_name,
-    h.workspace_id,
-    w.name AS workspace_name,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks
-FROM task_usage_hourly h
-JOIN workspace w ON w.id = h.workspace_id
-LEFT JOIN agent a ON a.id = h.agent_id
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= $4::bigint
-GROUP BY h.agent_id, a.name, h.workspace_id, w.name
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3
+    CASE $1::text
+        WHEN 'agent' THEN f.agent_id::text
+        WHEN 'project' THEN coalesce(f.project_id::text, '')
+        WHEN 'runtime' THEN f.runtime_id::text
+        WHEN 'provider' THEN f.provider
+        WHEN 'model' THEN f.provider || ' / ' || f.model
+        ELSE f.workspace_id::text
+    END AS id,
+    CASE $1::text
+        WHEN 'agent' THEN coalesce(a.name, '')
+        WHEN 'project' THEN coalesce(p.title, '')
+        WHEN 'runtime' THEN coalesce(rt.name, '')
+        WHEN 'provider' THEN f.provider
+        WHEN 'model' THEN f.model
+        ELSE w.name
+    END::text AS name,
+    max(f.workspace_id::text)::text AS workspace_id,
+    max(w.name)::text AS workspace_name,
+    max(w.slug)::text AS workspace_slug,
+    max(CASE WHEN $1::text = 'model' THEN f.provider ELSE '' END)::text AS provider,
+    max(CASE WHEN $1::text = 'model' THEN f.model ELSE '' END)::text AS model,
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.cache_write_tokens), 0)::bigint AS cache_write_tokens,
+    coalesce(sum(f.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count,
+    count(DISTINCT f.agent_id)::bigint AS agent_count,
+    max(f.bucket_hour)::timestamptz AS last_bucket,
+    (CASE $1::text
+        WHEN 'workspace' THEN max(coalesce(wd.seconds, 0))
+        WHEN 'agent' THEN max(coalesce(d.seconds, 0))
+        ELSE 0
+    END)::bigint AS duration_seconds
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+LEFT JOIN agent a ON a.id = f.agent_id
+LEFT JOIN project p ON p.id = f.project_id
+LEFT JOIN agent_runtime rt ON rt.id = f.runtime_id
+LEFT JOIN durations d ON d.agent_id = f.agent_id AND d.workspace_id = f.workspace_id
+LEFT JOIN workspace_durations wd ON wd.workspace_id = f.workspace_id
+GROUP BY 1, 2
+ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC, 2 ASC
+LIMIT $2::int
 `
 
-type ListAdminUsageByAgentParams struct {
-	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
-	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
-	Limit        int32              `json:"limit"`
-	MinIssues    int64              `json:"min_issues"`
+type ListAdminUsageByDimensionParams struct {
+	GroupBy     string             `json:"group_by"`
+	Limit       int32              `json:"limit"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	MinIssues   int64              `json:"min_issues"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Provider    string             `json:"provider"`
+	Model       string             `json:"model"`
 }
 
-type ListAdminUsageByAgentRow struct {
-	AgentID       pgtype.UUID `json:"agent_id"`
-	AgentName     string      `json:"agent_name"`
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	WorkspaceName string      `json:"workspace_name"`
-	InputTokens   int64       `json:"input_tokens"`
-	OutputTokens  int64       `json:"output_tokens"`
-	CostUsdTicks  int64       `json:"cost_usd_ticks"`
+type ListAdminUsageByDimensionRow struct {
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	WorkspaceID      string             `json:"workspace_id"`
+	WorkspaceName    string             `json:"workspace_name"`
+	WorkspaceSlug    string             `json:"workspace_slug"`
+	Provider         string             `json:"provider"`
+	Model            string             `json:"model"`
+	InputTokens      int64              `json:"input_tokens"`
+	OutputTokens     int64              `json:"output_tokens"`
+	CacheReadTokens  int64              `json:"cache_read_tokens"`
+	CacheWriteTokens int64              `json:"cache_write_tokens"`
+	CostUsdTicks     int64              `json:"cost_usd_ticks"`
+	TaskCount        int64              `json:"task_count"`
+	AgentCount       int64              `json:"agent_count"`
+	LastBucket       pgtype.Timestamptz `json:"last_bucket"`
+	DurationSeconds  int64              `json:"duration_seconds"`
 }
 
-func (q *Queries) ListAdminUsageByAgent(ctx context.Context, arg ListAdminUsageByAgentParams) ([]ListAdminUsageByAgentRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByAgent,
-		arg.BucketHour,
-		arg.BucketHour_2,
+// One aggregate query behind every ranking: the dimension switch groups by a
+// CASE key instead of repeating the same filters and sums six times.
+// Wall-clock time the agents actually spent running tasks that finished inside
+// the same window. Tasks carry no workspace column, so the agent join supplies
+// it; per-agent rows keep their own bucket and workspace rows roll up.
+func (q *Queries) ListAdminUsageByDimension(ctx context.Context, arg ListAdminUsageByDimensionParams) ([]ListAdminUsageByDimensionRow, error) {
+	rows, err := q.db.Query(ctx, listAdminUsageByDimension,
+		arg.GroupBy,
 		arg.Limit,
+		arg.FromAt,
+		arg.ToAt,
 		arg.MinIssues,
+		arg.WorkspaceID,
+		arg.Provider,
+		arg.Model,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAdminUsageByAgentRow{}
+	items := []ListAdminUsageByDimensionRow{}
 	for rows.Next() {
-		var i ListAdminUsageByAgentRow
+		var i ListAdminUsageByDimensionRow
 		if err := rows.Scan(
-			&i.AgentID,
-			&i.AgentName,
+			&i.ID,
+			&i.Name,
 			&i.WorkspaceID,
 			&i.WorkspaceName,
+			&i.WorkspaceSlug,
+			&i.Provider,
+			&i.Model,
 			&i.InputTokens,
 			&i.OutputTokens,
+			&i.CacheReadTokens,
+			&i.CacheWriteTokens,
 			&i.CostUsdTicks,
+			&i.TaskCount,
+			&i.AgentCount,
+			&i.LastBucket,
+			&i.DurationSeconds,
 		); err != nil {
 			return nil, err
 		}
@@ -1243,59 +1349,78 @@ func (q *Queries) ListAdminUsageByAgent(ctx context.Context, arg ListAdminUsageB
 	return items, nil
 }
 
-const listAdminUsageByModel = `-- name: ListAdminUsageByModel :many
+const listAdminUsageMatrix = `-- name: ListAdminUsageMatrix :many
+WITH filtered AS (
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= $1::timestamptz
+      AND h.bucket_hour < $2::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= $3::bigint
+      AND ($4::uuid IS NULL OR h.workspace_id = $4::uuid)
+      AND ($5::text = '' OR h.provider = $5::text)
+      AND ($6::text = '' OR h.model = $6::text)
+)
 SELECT
-    h.provider,
-    h.model,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
-    coalesce(sum(h.task_count), 0)::bigint AS task_count
-FROM task_usage_hourly h
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= $4::bigint
-GROUP BY h.provider, h.model
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3
+    f.workspace_id::text AS workspace_id,
+    w.name AS workspace_name,
+    f.provider,
+    f.model,
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+GROUP BY 1, 2, 3, 4
+ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC
+LIMIT 200
 `
 
-type ListAdminUsageByModelParams struct {
-	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
-	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
-	Limit        int32              `json:"limit"`
-	MinIssues    int64              `json:"min_issues"`
+type ListAdminUsageMatrixParams struct {
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	MinIssues   int64              `json:"min_issues"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Provider    string             `json:"provider"`
+	Model       string             `json:"model"`
 }
 
-type ListAdminUsageByModelRow struct {
-	Provider     string `json:"provider"`
-	Model        string `json:"model"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	CostUsdTicks int64  `json:"cost_usd_ticks"`
-	TaskCount    int64  `json:"task_count"`
+type ListAdminUsageMatrixRow struct {
+	WorkspaceID     string `json:"workspace_id"`
+	WorkspaceName   string `json:"workspace_name"`
+	Provider        string `json:"provider"`
+	Model           string `json:"model"`
+	InputTokens     int64  `json:"input_tokens"`
+	OutputTokens    int64  `json:"output_tokens"`
+	CacheReadTokens int64  `json:"cache_read_tokens"`
+	TaskCount       int64  `json:"task_count"`
 }
 
-func (q *Queries) ListAdminUsageByModel(ctx context.Context, arg ListAdminUsageByModelParams) ([]ListAdminUsageByModelRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByModel,
-		arg.BucketHour,
-		arg.BucketHour_2,
-		arg.Limit,
+func (q *Queries) ListAdminUsageMatrix(ctx context.Context, arg ListAdminUsageMatrixParams) ([]ListAdminUsageMatrixRow, error) {
+	rows, err := q.db.Query(ctx, listAdminUsageMatrix,
+		arg.FromAt,
+		arg.ToAt,
 		arg.MinIssues,
+		arg.WorkspaceID,
+		arg.Provider,
+		arg.Model,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAdminUsageByModelRow{}
+	items := []ListAdminUsageMatrixRow{}
 	for rows.Next() {
-		var i ListAdminUsageByModelRow
+		var i ListAdminUsageMatrixRow
 		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.WorkspaceName,
 			&i.Provider,
 			&i.Model,
 			&i.InputTokens,
 			&i.OutputTokens,
-			&i.CostUsdTicks,
+			&i.CacheReadTokens,
 			&i.TaskCount,
 		); err != nil {
 			return nil, err
@@ -1308,61 +1433,77 @@ func (q *Queries) ListAdminUsageByModel(ctx context.Context, arg ListAdminUsageB
 	return items, nil
 }
 
-const listAdminUsageByWorkspace = `-- name: ListAdminUsageByWorkspace :many
+const listAdminUsageTrend = `-- name: ListAdminUsageTrend :many
+WITH filtered AS (
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    FROM task_usage_hourly h
+    WHERE h.bucket_hour >= $2::timestamptz
+      AND h.bucket_hour < $3::timestamptz
+      AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+          >= $4::bigint
+      AND ($5::uuid IS NULL OR h.workspace_id = $5::uuid)
+      AND ($6::text = '' OR h.provider = $6::text)
+      AND ($7::text = '' OR h.model = $7::text)
+)
 SELECT
-    h.workspace_id,
+    date_trunc($1::text, f.bucket_hour)::timestamptz AS bucket_start,
+    f.workspace_id::text AS workspace_id,
     w.name AS workspace_name,
-    w.slug AS workspace_slug,
-    coalesce(sum(h.input_tokens), 0)::bigint AS input_tokens,
-    coalesce(sum(h.output_tokens), 0)::bigint AS output_tokens,
-    coalesce(sum(h.cost_usd_ticks), 0)::bigint AS cost_usd_ticks
-FROM task_usage_hourly h
-JOIN workspace w ON w.id = h.workspace_id
-WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
-  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
-      >= $4::bigint
-GROUP BY h.workspace_id, w.name, w.slug
-ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
-LIMIT $3
+    coalesce(sum(f.input_tokens), 0)::bigint AS input_tokens,
+    coalesce(sum(f.output_tokens), 0)::bigint AS output_tokens,
+    coalesce(sum(f.cache_read_tokens), 0)::bigint AS cache_read_tokens,
+    coalesce(sum(f.task_count), 0)::bigint AS task_count
+FROM filtered f
+JOIN workspace w ON w.id = f.workspace_id
+GROUP BY 1, 2, 3
+ORDER BY 1
 `
 
-type ListAdminUsageByWorkspaceParams struct {
-	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
-	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
-	Limit        int32              `json:"limit"`
-	MinIssues    int64              `json:"min_issues"`
+type ListAdminUsageTrendParams struct {
+	Bucket      string             `json:"bucket"`
+	FromAt      pgtype.Timestamptz `json:"from_at"`
+	ToAt        pgtype.Timestamptz `json:"to_at"`
+	MinIssues   int64              `json:"min_issues"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Provider    string             `json:"provider"`
+	Model       string             `json:"model"`
 }
 
-type ListAdminUsageByWorkspaceRow struct {
-	WorkspaceID   pgtype.UUID `json:"workspace_id"`
-	WorkspaceName string      `json:"workspace_name"`
-	WorkspaceSlug string      `json:"workspace_slug"`
-	InputTokens   int64       `json:"input_tokens"`
-	OutputTokens  int64       `json:"output_tokens"`
-	CostUsdTicks  int64       `json:"cost_usd_ticks"`
+type ListAdminUsageTrendRow struct {
+	BucketStart     pgtype.Timestamptz `json:"bucket_start"`
+	WorkspaceID     string             `json:"workspace_id"`
+	WorkspaceName   string             `json:"workspace_name"`
+	InputTokens     int64              `json:"input_tokens"`
+	OutputTokens    int64              `json:"output_tokens"`
+	CacheReadTokens int64              `json:"cache_read_tokens"`
+	TaskCount       int64              `json:"task_count"`
 }
 
-func (q *Queries) ListAdminUsageByWorkspace(ctx context.Context, arg ListAdminUsageByWorkspaceParams) ([]ListAdminUsageByWorkspaceRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByWorkspace,
-		arg.BucketHour,
-		arg.BucketHour_2,
-		arg.Limit,
+func (q *Queries) ListAdminUsageTrend(ctx context.Context, arg ListAdminUsageTrendParams) ([]ListAdminUsageTrendRow, error) {
+	rows, err := q.db.Query(ctx, listAdminUsageTrend,
+		arg.Bucket,
+		arg.FromAt,
+		arg.ToAt,
 		arg.MinIssues,
+		arg.WorkspaceID,
+		arg.Provider,
+		arg.Model,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListAdminUsageByWorkspaceRow{}
+	items := []ListAdminUsageTrendRow{}
 	for rows.Next() {
-		var i ListAdminUsageByWorkspaceRow
+		var i ListAdminUsageTrendRow
 		if err := rows.Scan(
+			&i.BucketStart,
 			&i.WorkspaceID,
 			&i.WorkspaceName,
-			&i.WorkspaceSlug,
 			&i.InputTokens,
 			&i.OutputTokens,
-			&i.CostUsdTicks,
+			&i.CacheReadTokens,
+			&i.TaskCount,
 		); err != nil {
 			return nil, err
 		}

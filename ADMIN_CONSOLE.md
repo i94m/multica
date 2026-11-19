@@ -50,14 +50,21 @@ returns 404 and the console is invisible.
 
 - Console: `/admin`
 - API: `/api/admin/*` (`me`, `overview`, `users`, `workspaces`, `tasks`,
-  `agents`, `runtimes`, `usage`)
+  `agents`, `runtimes`, `usage`, `usage/trend`, `usage/matrix`)
 
 All endpoints are GET-only. Mutating platform-admin actions (delete workspace,
 cancel task, disable user) are deliberately out of scope for this version.
 
-Usage defaults to the last 7 days and accepts `from` / `to` as RFC3339 or
-`YYYY-MM-DD`. Workspaces with fewer than 5 issues are excluded so personal
-scratch workspaces do not distort the cross-workspace totals.
+Usage is the Overview page's report; there is no separate usage page. It
+defaults to the last 7 days and accepts `from` / `to` as RFC3339 or
+`YYYY-MM-DD`, ranks by `group_by` (`workspace`, `agent`, `model`, `project`,
+`runtime`, `provider`), and filters by `workspace_id`, `provider`, and `model`.
+Workspaces with fewer than 5 issues are excluded so personal scratch
+workspaces do not distort the cross-workspace totals. Rankings also carry the
+workspace issue count and the wall-clock time agents spent on tasks that
+finished inside the range (workspace and agent groupings only). `/usage/trend` buckets
+the same filters by `day` or `week`; `/usage/matrix` returns the
+workspace × model cells.
 
 List endpoints use the traditional page contract:
 

@@ -73,3 +73,20 @@ func TestUsageRangeDefaultsToLastWeek(t *testing.T) {
 		t.Fatalf("invalid from should fall back: %s", from)
 	}
 }
+
+func TestUsageFilterValidatesDimensionAndFilters(t *testing.T) {
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+
+	filter := parseUsageFilter(httptest.NewRequest("GET", "/api/admin/usage?group_by=provider", nil), now)
+	if filter.groupBy != "provider" || filter.workspaceID.Valid {
+		t.Fatalf("unexpected filter: %+v", filter)
+	}
+
+	filter = parseUsageFilter(httptest.NewRequest("GET", "/api/admin/usage?group_by=password&workspace_id=nope", nil), now)
+	if filter.groupBy != "workspace" {
+		t.Fatalf("unknown dimension should fall back: %s", filter.groupBy)
+	}
+	if filter.workspaceID.Valid {
+		t.Fatal("invalid workspace id should be ignored")
+	}
+}

@@ -21,16 +21,6 @@ type adminCountsResponse struct {
 	Tasks24h        int64 `json:"tasks_24h"`
 }
 
-type adminUsageTotalsResponse struct {
-	InputTokens      int64   `json:"input_tokens"`
-	OutputTokens     int64   `json:"output_tokens"`
-	CacheReadTokens  int64   `json:"cache_read_tokens"`
-	CacheWriteTokens int64   `json:"cache_write_tokens"`
-	CostUsdTicks     int64   `json:"cost_usd_ticks"`
-	CostUSD          float64 `json:"cost_usd"`
-	TaskCount        int64   `json:"task_count"`
-}
-
 type adminCountResponse struct {
 	Status string `json:"status"`
 	Count  int64  `json:"count"`
@@ -73,8 +63,9 @@ func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	usage, err := h.queries.AdminUsageTotals(r.Context(), db.AdminUsageTotalsParams{
-		BucketHour:   pgtype.Timestamptz{Time: from, Valid: true},
-		BucketHour_2: pgtype.Timestamptz{Time: to, Valid: true},
+		FromAt:    pgtype.Timestamptz{Time: from, Valid: true},
+		ToAt:      pgtype.Timestamptz{Time: to, Valid: true},
+		MinIssues: minIssuesForUsage,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load usage")

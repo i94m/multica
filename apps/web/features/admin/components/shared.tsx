@@ -42,7 +42,7 @@ export function PageHeader({
   );
 }
 
-export function StatCard({ label, value }: { label: string; value: string | number }) {
+export function StatCard({ label, value }: { label: string; value: ReactNode }) {
   return (
     <Card size="sm">
       <CardContent className="px-3">

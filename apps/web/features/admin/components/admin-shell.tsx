@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  BarChart3,
   Bot,
   Building2,
   LayoutDashboard,
@@ -27,7 +26,6 @@ const navItems = [
   { key: "tasks", href: adminPaths.tasks(), icon: ListChecks },
   { key: "agents", href: adminPaths.agents(), icon: Bot },
   { key: "runtimes", href: adminPaths.runtimes(), icon: Monitor },
-  { key: "usage", href: adminPaths.usage(), icon: BarChart3 },
   { key: "roles", href: adminPaths.roles(), icon: Shield },
 ] as const;
 

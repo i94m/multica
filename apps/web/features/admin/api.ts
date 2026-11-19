@@ -11,7 +11,11 @@ import {
   adminRuntimePageSchema,
   adminTaskDetailSchema,
   adminTaskPageSchema,
+  adminUsageMatrixSchema,
   adminUsageSchema,
+  adminUsageTrendSchema,
+  emptyUsageMatrix,
+  emptyUsageTrend,
   adminUserDetailSchema,
   adminUserPageSchema,
   adminWorkspaceDetailSchema,
@@ -28,6 +32,8 @@ import {
   type AdminTaskDetail,
   type AdminTaskPage,
   type AdminUsage,
+  type AdminUsageMatrix,
+  type AdminUsageTrend,
   type AdminUser,
   type AdminUserDetail,
   type AdminUserPage,
@@ -208,6 +214,24 @@ export const adminApi = {
       "GET /api/admin/usage",
       params,
     ),
+
+  getUsageTrend: (params?: AdminQuery) =>
+    adminGet<AdminUsageTrend>(
+      "/api/admin/usage/trend",
+      adminUsageTrendSchema,
+      emptyUsageTrend,
+      "GET /api/admin/usage/trend",
+      params,
+    ),
+
+  getUsageMatrix: (params?: AdminQuery) =>
+    adminGet<AdminUsageMatrix>(
+      "/api/admin/usage/matrix",
+      adminUsageMatrixSchema,
+      emptyUsageMatrix,
+      "GET /api/admin/usage/matrix",
+      params,
+    ),
 };
 
 export type {
@@ -223,6 +247,8 @@ export type {
   AdminTaskDetail,
   AdminTaskPage,
   AdminUsage,
+  AdminUsageMatrix,
+  AdminUsageTrend,
   AdminUser,
   AdminUserDetail,
   AdminUserPage,

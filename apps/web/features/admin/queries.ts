@@ -16,6 +16,8 @@ export const adminKeys = {
   runtimes: (params: AdminQuery) => [...adminKeys.all(), "runtimes", params] as const,
   runtime: (id: string) => [...adminKeys.all(), "runtime", id] as const,
   usage: (params: AdminQuery) => [...adminKeys.all(), "usage", params] as const,
+  usageTrend: (params: AdminQuery) => [...adminKeys.all(), "usage-trend", params] as const,
+  usageMatrix: (params: AdminQuery) => [...adminKeys.all(), "usage-matrix", params] as const,
 };
 
 export function adminMeOptions() {
@@ -129,6 +131,25 @@ export function adminUsageOptions(params: AdminQuery) {
   return queryOptions({
     queryKey: adminKeys.usage(params),
     queryFn: () => adminApi.getUsage(params),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+export function adminUsageTrendOptions(params: AdminQuery) {
+  return queryOptions({
+    queryKey: adminKeys.usageTrend(params),
+    queryFn: () => adminApi.getUsageTrend(params),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+export function adminUsageMatrixOptions(params: AdminQuery) {
+  return queryOptions({
+    queryKey: adminKeys.usageMatrix(params),
+    queryFn: () => adminApi.getUsageMatrix(params),
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
 }

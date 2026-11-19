@@ -48,6 +48,8 @@ func RegisterRoutes(
 			r.Get("/runtimes/{id}", h.GetRuntime)
 
 			r.Get("/usage", h.Usage)
+			r.Get("/usage/trend", h.UsageTrend)
+			r.Get("/usage/matrix", h.UsageMatrix)
 
 			// Roles are platform-level and maintained here: this is the only
 			// write surface in the console.
