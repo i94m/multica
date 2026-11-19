@@ -55,6 +55,10 @@ returns 404 and the console is invisible.
 All endpoints are GET-only. Mutating platform-admin actions (delete workspace,
 cancel task, disable user) are deliberately out of scope for this version.
 
+Usage defaults to the last 7 days and accepts `from` / `to` as RFC3339 or
+`YYYY-MM-DD`. Workspaces with fewer than 5 issues are excluded so personal
+scratch workspaces do not distort the cross-workspace totals.
+
 List endpoints use the traditional page contract:
 
 ```

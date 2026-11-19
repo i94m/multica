@@ -534,8 +534,13 @@ SELECT
     coalesce(sum(cache_write_tokens), 0)::bigint AS cache_write_tokens,
     coalesce(sum(cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
     coalesce(sum(task_count), 0)::bigint AS task_count
-FROM task_usage_hourly
-WHERE bucket_hour >= $1 AND bucket_hour < $2;
+FROM task_usage_hourly h
+WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  -- Personal workspaces hold a handful of issues; they would otherwise skew
+  -- cross-workspace usage totals. Product rule: only count workspaces with
+  -- at least 5 issues.
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= sqlc.arg('min_issues')::bigint;
 
 -- name: ListAdminUsageByWorkspace :many
 SELECT
@@ -548,8 +553,10 @@ SELECT
 FROM task_usage_hourly h
 JOIN workspace w ON w.id = h.workspace_id
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= sqlc.arg('min_issues')::bigint
 GROUP BY h.workspace_id, w.name, w.slug
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3;
 
 -- name: ListAdminUsageByAgent :many
@@ -565,8 +572,10 @@ FROM task_usage_hourly h
 JOIN workspace w ON w.id = h.workspace_id
 LEFT JOIN agent a ON a.id = h.agent_id
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= sqlc.arg('min_issues')::bigint
 GROUP BY h.agent_id, a.name, h.workspace_id, w.name
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3;
 
 -- name: ListAdminUsageByModel :many
@@ -579,6 +588,8 @@ SELECT
     coalesce(sum(h.task_count), 0)::bigint AS task_count
 FROM task_usage_hourly h
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= sqlc.arg('min_issues')::bigint
 GROUP BY h.provider, h.model
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3;

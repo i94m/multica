@@ -43,11 +43,25 @@ func usageTotalsResponse(row db.AdminUsageTotalsRow) adminUsageTotalsResponse {
 	}
 }
 
+// minIssuesForUsage drops personal workspaces from the cross-workspace usage
+// report. They hold a handful of issues, so a busy individual would otherwise
+// outweigh a real team in the token and task totals.
+const minIssuesForUsage = 5
+
+// defaultUsageDays keeps the report to the current week unless the caller asks
+// for an explicit range.
+const defaultUsageDays = 7
+
+func usageRange(r *http.Request, now time.Time) (from, to time.Time) {
+	values := r.URL.Query()
+	from = timeParamOrDefault(queryValue(values, "from"), now.AddDate(0, 0, -defaultUsageDays))
+	to = timeParamOrDefault(queryValue(values, "to"), now)
+	return from, to
+}
+
 func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 	values := r.URL.Query()
-	now := time.Now().UTC()
-	from := timeParamOrDefault(queryValue(values, "from"), now.AddDate(0, 0, -30))
-	to := timeParamOrDefault(queryValue(values, "to"), now)
+	from, to := usageRange(r, time.Now().UTC())
 	groupBy := queryValue(values, "group_by")
 	if groupBy == "" {
 		groupBy = "workspace"
@@ -56,6 +70,7 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 	params := db.AdminUsageTotalsParams{
 		BucketHour:   pgtype.Timestamptz{Time: from, Valid: true},
 		BucketHour_2: pgtype.Timestamptz{Time: to, Valid: true},
+		MinIssues:    minIssuesForUsage,
 	}
 	totals, err := h.queries.AdminUsageTotals(r.Context(), params)
 	if err != nil {
@@ -76,6 +91,7 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		rows, err := h.queries.ListAdminUsageByAgent(r.Context(), db.ListAdminUsageByAgentParams{
 			BucketHour:   params.BucketHour,
 			BucketHour_2: params.BucketHour_2,
+			MinIssues:    minIssuesForUsage,
 			Limit:        100,
 		})
 		if err != nil {
@@ -98,6 +114,7 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		rows, err := h.queries.ListAdminUsageByModel(r.Context(), db.ListAdminUsageByModelParams{
 			BucketHour:   params.BucketHour,
 			BucketHour_2: params.BucketHour_2,
+			MinIssues:    minIssuesForUsage,
 			Limit:        100,
 		})
 		if err != nil {
@@ -120,6 +137,7 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 		rows, err := h.queries.ListAdminUsageByWorkspace(r.Context(), db.ListAdminUsageByWorkspaceParams{
 			BucketHour:   params.BucketHour,
 			BucketHour_2: params.BucketHour_2,
+			MinIssues:    minIssuesForUsage,
 			Limit:        100,
 		})
 		if err != nil {

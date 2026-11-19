@@ -3,6 +3,7 @@ package admin
 import (
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestParsePageRequestDefaults(t *testing.T) {
@@ -46,5 +47,29 @@ func TestNewPageResponse(t *testing.T) {
 	empty := newPageResponse[string](nil, 0, req)
 	if empty.Items == nil || empty.TotalPages != 0 || empty.HasMore {
 		t.Fatalf("unexpected empty page: %+v", empty)
+	}
+}
+
+func TestUsageRangeDefaultsToLastWeek(t *testing.T) {
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+
+	from, to := usageRange(httptest.NewRequest("GET", "/api/admin/usage", nil), now)
+	if !from.Equal(now.AddDate(0, 0, -7)) || !to.Equal(now) {
+		t.Fatalf("unexpected default range: from=%s to=%s", from, to)
+	}
+
+	req := httptest.NewRequest("GET", "/api/admin/usage?from=2026-10-01&to=2026-10-08", nil)
+	from, to = usageRange(req, now)
+	if got := from.Format("2006-01-02"); got != "2026-10-01" {
+		t.Fatalf("unexpected from: %s", got)
+	}
+	if got := to.Format("2006-01-02"); got != "2026-10-08" {
+		t.Fatalf("unexpected to: %s", got)
+	}
+
+	req = httptest.NewRequest("GET", "/api/admin/usage?from=not-a-date", nil)
+	from, _ = usageRange(req, now)
+	if !from.Equal(now.AddDate(0, 0, -7)) {
+		t.Fatalf("invalid from should fall back: %s", from)
 	}
 }

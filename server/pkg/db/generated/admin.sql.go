@@ -168,13 +168,19 @@ SELECT
     coalesce(sum(cache_write_tokens), 0)::bigint AS cache_write_tokens,
     coalesce(sum(cost_usd_ticks), 0)::bigint AS cost_usd_ticks,
     coalesce(sum(task_count), 0)::bigint AS task_count
-FROM task_usage_hourly
-WHERE bucket_hour >= $1 AND bucket_hour < $2
+FROM task_usage_hourly h
+WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  -- Personal workspaces hold a handful of issues; they would otherwise skew
+  -- cross-workspace usage totals. Product rule: only count workspaces with
+  -- at least 5 issues.
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= $3::bigint
 `
 
 type AdminUsageTotalsParams struct {
 	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
 	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
+	MinIssues    int64              `json:"min_issues"`
 }
 
 type AdminUsageTotalsRow struct {
@@ -187,7 +193,7 @@ type AdminUsageTotalsRow struct {
 }
 
 func (q *Queries) AdminUsageTotals(ctx context.Context, arg AdminUsageTotalsParams) (AdminUsageTotalsRow, error) {
-	row := q.db.QueryRow(ctx, adminUsageTotals, arg.BucketHour, arg.BucketHour_2)
+	row := q.db.QueryRow(ctx, adminUsageTotals, arg.BucketHour, arg.BucketHour_2, arg.MinIssues)
 	var i AdminUsageTotalsRow
 	err := row.Scan(
 		&i.InputTokens,
@@ -1180,8 +1186,10 @@ FROM task_usage_hourly h
 JOIN workspace w ON w.id = h.workspace_id
 LEFT JOIN agent a ON a.id = h.agent_id
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= $4::bigint
 GROUP BY h.agent_id, a.name, h.workspace_id, w.name
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3
 `
 
@@ -1189,6 +1197,7 @@ type ListAdminUsageByAgentParams struct {
 	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
 	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
 	Limit        int32              `json:"limit"`
+	MinIssues    int64              `json:"min_issues"`
 }
 
 type ListAdminUsageByAgentRow struct {
@@ -1202,7 +1211,12 @@ type ListAdminUsageByAgentRow struct {
 }
 
 func (q *Queries) ListAdminUsageByAgent(ctx context.Context, arg ListAdminUsageByAgentParams) ([]ListAdminUsageByAgentRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByAgent, arg.BucketHour, arg.BucketHour_2, arg.Limit)
+	rows, err := q.db.Query(ctx, listAdminUsageByAgent,
+		arg.BucketHour,
+		arg.BucketHour_2,
+		arg.Limit,
+		arg.MinIssues,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1239,8 +1253,10 @@ SELECT
     coalesce(sum(h.task_count), 0)::bigint AS task_count
 FROM task_usage_hourly h
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= $4::bigint
 GROUP BY h.provider, h.model
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3
 `
 
@@ -1248,6 +1264,7 @@ type ListAdminUsageByModelParams struct {
 	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
 	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
 	Limit        int32              `json:"limit"`
+	MinIssues    int64              `json:"min_issues"`
 }
 
 type ListAdminUsageByModelRow struct {
@@ -1260,7 +1277,12 @@ type ListAdminUsageByModelRow struct {
 }
 
 func (q *Queries) ListAdminUsageByModel(ctx context.Context, arg ListAdminUsageByModelParams) ([]ListAdminUsageByModelRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByModel, arg.BucketHour, arg.BucketHour_2, arg.Limit)
+	rows, err := q.db.Query(ctx, listAdminUsageByModel,
+		arg.BucketHour,
+		arg.BucketHour_2,
+		arg.Limit,
+		arg.MinIssues,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1297,8 +1319,10 @@ SELECT
 FROM task_usage_hourly h
 JOIN workspace w ON w.id = h.workspace_id
 WHERE h.bucket_hour >= $1 AND h.bucket_hour < $2
+  AND (SELECT count(*) FROM issue i WHERE i.workspace_id = h.workspace_id)
+      >= $4::bigint
 GROUP BY h.workspace_id, w.name, w.slug
-ORDER BY cost_usd_ticks DESC
+ORDER BY cost_usd_ticks DESC, coalesce(sum(h.input_tokens + h.output_tokens + h.cache_read_tokens), 0) DESC
 LIMIT $3
 `
 
@@ -1306,6 +1330,7 @@ type ListAdminUsageByWorkspaceParams struct {
 	BucketHour   pgtype.Timestamptz `json:"bucket_hour"`
 	BucketHour_2 pgtype.Timestamptz `json:"bucket_hour_2"`
 	Limit        int32              `json:"limit"`
+	MinIssues    int64              `json:"min_issues"`
 }
 
 type ListAdminUsageByWorkspaceRow struct {
@@ -1318,7 +1343,12 @@ type ListAdminUsageByWorkspaceRow struct {
 }
 
 func (q *Queries) ListAdminUsageByWorkspace(ctx context.Context, arg ListAdminUsageByWorkspaceParams) ([]ListAdminUsageByWorkspaceRow, error) {
-	rows, err := q.db.Query(ctx, listAdminUsageByWorkspace, arg.BucketHour, arg.BucketHour_2, arg.Limit)
+	rows, err := q.db.Query(ctx, listAdminUsageByWorkspace,
+		arg.BucketHour,
+		arg.BucketHour_2,
+		arg.Limit,
+		arg.MinIssues,
+	)
 	if err != nil {
 		return nil, err
 	}

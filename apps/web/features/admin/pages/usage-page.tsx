@@ -1,8 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocale } from "@multica/views/i18n";
+import {
+  addDaysDateOnly,
+  dateOnlyToLocalDate,
+  formatDateOnly,
+  todayDateOnly,
+} from "@multica/core/issues/date";
 import {
   Select,
   SelectContent,
@@ -18,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@multica/ui/components/ui/table";
+import { AdminDatePicker } from "../components/date-picker";
 import { adminUsageOptions } from "../queries";
 import { useAdminCopy } from "../i18n";
 import { adminPaths } from "../paths";
@@ -33,11 +40,43 @@ import {
   formatNumber,
 } from "../components/shared";
 
+/** Start of a calendar day in the viewer's timezone, as an instant. */
+function dayStartISO(day: string): string {
+  const start = dateOnlyToLocalDate(day);
+  return (start ?? new Date()).toISOString();
+}
+
+/** Exclusive upper bound: the next local midnight after an inclusive day. */
+function nextDayStartISO(day: string): string {
+  const start = dateOnlyToLocalDate(day);
+  if (!start) return new Date().toISOString();
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1).toISOString();
+}
+
 export default function UsagePage() {
   const copy = useAdminCopy();
   const locale = useLocale();
   const [groupBy, setGroupBy] = useState<"workspace" | "agent" | "model">("workspace");
-  const usage = useQuery(adminUsageOptions({ group_by: groupBy }));
+  const [range, setRange] = useState(() => ({
+    from: addDaysDateOnly(-6),
+    to: todayDateOnly(),
+  }));
+  const from = range.from || addDaysDateOnly(-6);
+  const to = range.to || todayDateOnly();
+  const params = useMemo(
+    () => ({ group_by: groupBy, from: dayStartISO(from), to: nextDayStartISO(to) }),
+    [groupBy, from, to],
+  );
+  const usage = useQuery(adminUsageOptions(params));
+
+  const updateFrom = (value: string) => {
+    const next = value || addDaysDateOnly(-6);
+    setRange((prev) => ({ from: next, to: prev.to < next ? next : prev.to }));
+  };
+  const updateTo = (value: string) => {
+    const next = value || todayDateOnly();
+    setRange((prev) => ({ from: prev.from > next ? next : prev.from, to: next }));
+  };
 
   if (usage.isLoading) return <LoadingState label={copy.common.loading} />;
   if (usage.isError || !usage.data) {
@@ -63,7 +102,7 @@ export default function UsagePage() {
     <div className="space-y-4">
       <PageHeader
         title={copy.nav.usage}
-        description={copy.common.days30}
+        description={`${formatDateOnly(from, { month: "short", day: "numeric" }, locale)} – ${formatDateOnly(to, { month: "short", day: "numeric" }, locale)} · ${copy.usage.excludedNote}`}
         actions={
           <Select
             items={groupItems}
@@ -85,6 +124,29 @@ export default function UsagePage() {
           </Select>
         }
       />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+          <span>{copy.common.from}</span>
+          <AdminDatePicker
+            value={range.from}
+            onChange={updateFrom}
+            label={copy.common.from}
+            placeholder={copy.common.anyDate}
+            emptyLabel={copy.common.anyDate}
+          />
+        </div>
+        <div className="flex items-center gap-2 text-caption text-muted-foreground">
+          <span>{copy.common.to}</span>
+          <AdminDatePicker
+            value={range.to}
+            onChange={updateTo}
+            label={copy.common.to}
+            placeholder={copy.common.anyDate}
+            emptyLabel={copy.common.anyDate}
+          />
+        </div>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label={copy.usage.input} value={formatNumber(data.totals.input_tokens, locale)} />

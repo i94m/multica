@@ -81,7 +81,6 @@ const en = {
     workspaceGroup: "Workspace",
     agentGroup: "Agent",
     modelGroup: "Model",
-    days30: "Last 30 days",
     failure: "Failure",
     retry: "Retry",
     description: "Description",
@@ -118,6 +117,7 @@ const en = {
     cacheWrite: "Cache write",
     cost: "Reported cost",
     tasks: "Tasks",
+    excludedNote: "Workspaces with fewer than 5 issues are excluded",
   },
   roles: {
     title: "Roles",
@@ -232,7 +232,6 @@ const zh: AdminCopy = {
     workspaceGroup: "工作空间",
     agentGroup: "Agent",
     modelGroup: "模型",
-    days30: "最近 30 天",
     failure: "失败原因",
     retry: "重试",
     description: "描述",
@@ -269,6 +268,7 @@ const zh: AdminCopy = {
     cacheWrite: "缓存写入",
     cost: "供应商成本",
     tasks: "任务数",
+    excludedNote: "已排除 issue 数少于 5 的 workspace",
   },
   roles: {
     title: "角色",
