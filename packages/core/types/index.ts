@@ -411,6 +411,7 @@ export type {
   BillingCheckoutSessionStatus,
   CreateBillingPortalSessionResponse,
   WorkspaceSubscriptionInterval,
+  WorkspaceSubscriptionPaidPlan,
   WorkspaceEntitlementLimitMode,
   WorkspaceEntitlementLimit,
   WorkspaceSubscriptionEntitlements,
@@ -418,13 +419,21 @@ export type {
   WorkspaceSeatCapacity,
   WorkspaceSeatPurchaseSummary,
   WorkspaceSubscriptionPrice,
+  WorkspaceSubscriptionPlanPrices,
   WorkspaceSubscriptionPrices,
+  WorkspacePlanChangeHold,
+  WorkspaceTrial,
+  WorkspaceTrialState,
   CreateWorkspaceSubscriptionCheckoutRequest,
   CreateWorkspaceSubscriptionCheckoutResponse,
   PreviewWorkspaceSeatPurchaseRequest,
   WorkspaceSeatPurchasePreview,
   PurchaseWorkspaceSeatsRequest,
   PurchaseWorkspaceSeatsResponse,
+  PreviewWorkspacePlanChangeRequest,
+  WorkspacePlanChangePreview,
+  ChangeWorkspacePlanRequest,
+  ChangeWorkspacePlanResponse,
   WorkspaceSubscriptionSeatReconcileResult,
   CreateWorkspaceSubscriptionPortalResponse,
   PaidFeature,
@@ -436,3 +445,5 @@ export type { IssueWakeup, IssueWakeupInput, SystemWakeup, WorkspaceSystemWakeup
 export type { WorkspaceWakeup, WorkspaceWakeupPage, WorkspaceWakeupFilters, WakeupScope } from "./issue-wakeup";
 
 export type { WeixinInstallation, ListWeixinInstallationsResponse, WeixinLogin } from "./weixin";
+
+export * from "./doc";

@@ -13,7 +13,8 @@
     "skills": "Навыки",
     "settings": "Настройки",
     "views": "Представления",
-    "roles": "Роли"
+    "roles": "Роли",
+    "docs": "Документы"
   },
   "tab": {
     "issue": "Задача",
@@ -28,7 +29,9 @@
     "attachment": "Вложение",
     "create_agent": "Создать агента",
     "my_agents": "Работа моих агентов",
-    "unknown": "Неизвестная страница"
+    "unknown": "Неизвестная страница",
+    "doc": "Документы",
+    "docFolder": "Папка"
   },
   "help": {
     "trigger": "Помощь",
@@ -91,7 +94,8 @@
     "workspace_meta_one": "{{slug}} · {{count}} участник",
     "workspace_meta_few": "{{slug}} · {{count}} участника",
     "workspace_meta_many": "{{slug}} · {{count}} участников",
-    "workspace_meta_other": "{{slug}} · {{count}} участника"
+    "workspace_meta_other": "{{slug}} · {{count}} участника",
+    "docs": "Документы"
   },
   "bottom_bar": {
     "label": "Строка состояния",
