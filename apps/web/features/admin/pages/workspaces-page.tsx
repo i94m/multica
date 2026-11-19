@@ -7,6 +7,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@multica/ui/components/ui/table";
@@ -90,6 +91,7 @@ export default function WorkspacesPage() {
                   order={list.order}
                   onSort={list.onSort}
                 />
+                <TableHead>{copy.common.owner}</TableHead>
                 <SortableHead
                   label={copy.common.members}
                   column="members"
@@ -140,6 +142,7 @@ export default function WorkspacesPage() {
                     </EntityLink>
                     <span className="ml-2 text-caption text-muted-foreground">{workspace.slug}</span>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{workspace.owner_email}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatNumber(workspace.member_count, locale)}
                   </TableCell>

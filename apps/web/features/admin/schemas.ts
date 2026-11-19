@@ -62,6 +62,7 @@ export const adminWorkspaceSchema = z.object({
   issue_count: z.number().default(0),
   agent_count: z.number().default(0),
   runtime_count: z.number().default(0),
+  owner_email: z.string().default(""),
 });
 
 export const adminWorkspaceMemberSchema = z.object({

@@ -653,7 +653,15 @@ SELECT
     (SELECT count(*) FROM member m WHERE m.workspace_id = w.id)::bigint AS member_count,
     (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id)::bigint AS issue_count,
     (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL)::bigint AS agent_count,
-    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count
+    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count,
+    COALESCE((
+        SELECT u.email
+        FROM member m
+        JOIN "user" u ON u.id = m.user_id
+        WHERE m.workspace_id = w.id AND m.role = 'owner'
+        ORDER BY m.created_at ASC
+        LIMIT 1
+    ), '')::text AS owner_email
 FROM workspace w
 WHERE w.id = $1
 `
@@ -668,6 +676,7 @@ type GetAdminWorkspaceRow struct {
 	IssueCount   int64              `json:"issue_count"`
 	AgentCount   int64              `json:"agent_count"`
 	RuntimeCount int64              `json:"runtime_count"`
+	OwnerEmail   string             `json:"owner_email"`
 }
 
 func (q *Queries) GetAdminWorkspace(ctx context.Context, id pgtype.UUID) (GetAdminWorkspaceRow, error) {
@@ -683,6 +692,7 @@ func (q *Queries) GetAdminWorkspace(ctx context.Context, id pgtype.UUID) (GetAdm
 		&i.IssueCount,
 		&i.AgentCount,
 		&i.RuntimeCount,
+		&i.OwnerEmail,
 	)
 	return i, err
 }
@@ -1492,7 +1502,15 @@ SELECT
     (SELECT count(*) FROM member m WHERE m.workspace_id = w.id)::bigint AS member_count,
     (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id)::bigint AS issue_count,
     (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL)::bigint AS agent_count,
-    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count
+    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count,
+    COALESCE((
+        SELECT u.email
+        FROM member m
+        JOIN "user" u ON u.id = m.user_id
+        WHERE m.workspace_id = w.id AND m.role = 'owner'
+        ORDER BY m.created_at ASC
+        LIMIT 1
+    ), '')::text AS owner_email
 FROM workspace w
 CROSS JOIN params p
 WHERE (
@@ -1536,6 +1554,7 @@ type ListAdminWorkspacesRow struct {
 	IssueCount   int64              `json:"issue_count"`
 	AgentCount   int64              `json:"agent_count"`
 	RuntimeCount int64              `json:"runtime_count"`
+	OwnerEmail   string             `json:"owner_email"`
 }
 
 func (q *Queries) ListAdminWorkspaces(ctx context.Context, arg ListAdminWorkspacesParams) ([]ListAdminWorkspacesRow, error) {
@@ -1563,6 +1582,7 @@ func (q *Queries) ListAdminWorkspaces(ctx context.Context, arg ListAdminWorkspac
 			&i.IssueCount,
 			&i.AgentCount,
 			&i.RuntimeCount,
+			&i.OwnerEmail,
 		); err != nil {
 			return nil, err
 		}

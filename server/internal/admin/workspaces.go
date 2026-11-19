@@ -17,6 +17,7 @@ type adminWorkspaceResponse struct {
 	IssueCount   int64   `json:"issue_count"`
 	AgentCount   int64   `json:"agent_count"`
 	RuntimeCount int64   `json:"runtime_count"`
+	OwnerEmail   string  `json:"owner_email"`
 }
 
 type adminWorkspaceMemberResponse struct {
@@ -45,6 +46,7 @@ func workspaceResponse(row db.GetAdminWorkspaceRow) adminWorkspaceResponse {
 		IssueCount:   row.IssueCount,
 		AgentCount:   row.AgentCount,
 		RuntimeCount: row.RuntimeCount,
+		OwnerEmail:   row.OwnerEmail,
 	}
 }
 
@@ -59,6 +61,7 @@ func listWorkspaceResponse(row db.ListAdminWorkspacesRow) adminWorkspaceResponse
 		IssueCount:   row.IssueCount,
 		AgentCount:   row.AgentCount,
 		RuntimeCount: row.RuntimeCount,
+		OwnerEmail:   row.OwnerEmail,
 	}
 }
 

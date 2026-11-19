@@ -110,7 +110,15 @@ SELECT
     (SELECT count(*) FROM member m WHERE m.workspace_id = w.id)::bigint AS member_count,
     (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id)::bigint AS issue_count,
     (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL)::bigint AS agent_count,
-    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count
+    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count,
+    COALESCE((
+        SELECT u.email
+        FROM member m
+        JOIN "user" u ON u.id = m.user_id
+        WHERE m.workspace_id = w.id AND m.role = 'owner'
+        ORDER BY m.created_at ASC
+        LIMIT 1
+    ), '')::text AS owner_email
 FROM workspace w
 CROSS JOIN params p
 WHERE (
@@ -154,7 +162,15 @@ SELECT
     (SELECT count(*) FROM member m WHERE m.workspace_id = w.id)::bigint AS member_count,
     (SELECT count(*) FROM issue i WHERE i.workspace_id = w.id)::bigint AS issue_count,
     (SELECT count(*) FROM agent a WHERE a.workspace_id = w.id AND a.archived_at IS NULL)::bigint AS agent_count,
-    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count
+    (SELECT count(*) FROM agent_runtime r WHERE r.workspace_id = w.id)::bigint AS runtime_count,
+    COALESCE((
+        SELECT u.email
+        FROM member m
+        JOIN "user" u ON u.id = m.user_id
+        WHERE m.workspace_id = w.id AND m.role = 'owner'
+        ORDER BY m.created_at ASC
+        LIMIT 1
+    ), '')::text AS owner_email
 FROM workspace w
 WHERE w.id = $1;
 
