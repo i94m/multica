@@ -395,12 +395,12 @@ export function UsageReport() {
       copy.common.issues,
       copy.usage.tasks,
       copy.usage.workTime,
-      copy.usage.lastActive,
       copy.usage.totalTokens,
       copy.usage.cacheRead,
       copy.usage.cacheHit,
       copy.usage.perTask,
       copy.usage.share,
+      copy.usage.lastActive,
     ];
     const body = sortedRows.map((row) => [
       row.name || row.workspace_name,
@@ -408,12 +408,12 @@ export function UsageReport() {
       dimension === "workspace" ? row.issue_count : "",
       row.task_count,
       (row.duration_seconds / 3600).toFixed(2),
-      row.last_active_at,
       totalTokens(row),
       row.cache_read_tokens,
       cacheHit(row).toFixed(4),
       Math.round(perTask(totalTokens(row), row.task_count)),
       totalsTokens > 0 ? (totalTokens(row) / totalsTokens).toFixed(4) : "0",
+      row.last_active_at,
     ]);
     downloadCsv(`multica-usage-${dimension}-${fromDay}-${toDay}.csv`, [header, ...body]);
   };
@@ -654,13 +654,6 @@ export function UsageReport() {
                     className="text-right"
                   />
                   <SortHead
-                    label={copy.usage.lastActive}
-                    column="lastActiveAt"
-                    sort={sort}
-                    order={order}
-                    onSort={onSort}
-                  />
-                  <SortHead
                     label={copy.usage.totalTokens}
                     column="totalTokens"
                     sort={sort}
@@ -700,6 +693,13 @@ export function UsageReport() {
                     onSort={onSort}
                     className="text-right"
                   />
+                  <SortHead
+                    label={copy.usage.lastActive}
+                    column="lastActiveAt"
+                    sort={sort}
+                    order={order}
+                    onSort={onSort}
+                  />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -737,9 +737,6 @@ export function UsageReport() {
                       <TableCell className="text-right tabular-nums">
                         {formatWorkTime(row.duration_seconds)}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDateTime(row.last_active_at, locale)}
-                      </TableCell>
                       <TableCell className="text-right">
                         <TokenCell value={totalTokens(row)} locale={locale} />
                       </TableCell>
@@ -757,6 +754,9 @@ export function UsageReport() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {totalsTokens > 0 ? percent(totalTokens(row) / totalsTokens) : "—"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDateTime(row.last_active_at, locale)}
                       </TableCell>
                     </TableRow>
                   );
