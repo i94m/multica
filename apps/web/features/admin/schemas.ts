@@ -265,6 +265,7 @@ export const adminUsageRowSchema = z.object({
   task_count: z.number().default(0),
   agent_count: z.number().default(0),
   duration_seconds: z.number().default(0),
+  issue_count: z.number().default(0),
   last_active_at: z.string().default(""),
 });
 

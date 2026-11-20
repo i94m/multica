@@ -270,11 +270,9 @@ export function UsageReport() {
   const totals: AdminUsageTotals | undefined = usage.data?.totals;
   const totalsTokens = totals ? totalTokens(totals) : 0;
 
-  const workspaceIssues = new Map(
+  const workspaceIssueTotals = new Map(
     (workspaceList.data?.items ?? []).map((workspace) => [workspace.id, workspace.issue_count]),
   );
-  const issuesFor = (row: AdminUsageRow) =>
-    dimension === "workspace" ? (workspaceIssues.get(row.workspace_id) ?? 0) : 0;
 
   const valueFor = (row: AdminUsageRow, key: SortKey): number | string => {
     const tokens = totalTokens(row);
@@ -282,7 +280,7 @@ export function UsageReport() {
       case "name":
         return row.name || row.workspace_name;
       case "issueCount":
-        return issuesFor(row);
+        return row.issue_count;
       case "duration":
         return row.duration_seconds;
       case "cacheReadTokens":
@@ -407,7 +405,7 @@ export function UsageReport() {
     const body = sortedRows.map((row) => [
       row.name || row.workspace_name,
       row.workspace_name,
-      dimension === "workspace" ? issuesFor(row) : "",
+      dimension === "workspace" ? row.issue_count : "",
       row.task_count,
       (row.duration_seconds / 3600).toFixed(2),
       row.last_active_at,
@@ -720,10 +718,18 @@ export function UsageReport() {
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {dimension === "workspace"
-                          ? formatNumber(issuesFor(row), locale)
-                          : "—"}
+                      <TableCell
+                        className="text-right tabular-nums"
+                        title={
+                          dimension === "workspace"
+                            ? `${copy.usage.issueTotal}: ${formatNumber(
+                                workspaceIssueTotals.get(row.workspace_id) ?? 0,
+                                locale,
+                              )}`
+                            : undefined
+                        }
+                      >
+                        {dimension === "workspace" ? formatNumber(row.issue_count, locale) : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatNumber(row.task_count, locale)}

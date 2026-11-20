@@ -580,6 +580,15 @@ workspace_durations AS (
     SELECT workspace_id, sum(seconds)::bigint AS seconds
     FROM durations
     GROUP BY 1
+),
+-- Issues opened inside the window, so the column follows the range like every
+-- other number on the row instead of showing a lifetime total.
+issue_counts AS (
+    SELECT i.workspace_id, count(*)::bigint AS issues
+    FROM issue i
+    WHERE i.created_at >= sqlc.arg('from_at')::timestamptz
+      AND i.created_at < sqlc.arg('to_at')::timestamptz
+    GROUP BY 1
 )
 SELECT
     CASE sqlc.arg('group_by')::text
@@ -615,7 +624,11 @@ SELECT
         WHEN 'workspace' THEN max(coalesce(wd.seconds, 0))
         WHEN 'agent' THEN max(coalesce(d.seconds, 0))
         ELSE 0
-    END)::bigint AS duration_seconds
+    END)::bigint AS duration_seconds,
+    (CASE sqlc.arg('group_by')::text
+        WHEN 'workspace' THEN max(coalesce(ic.issues, 0))
+        ELSE 0
+    END)::bigint AS issue_count
 FROM filtered f
 JOIN workspace w ON w.id = f.workspace_id
 LEFT JOIN agent a ON a.id = f.agent_id
@@ -623,6 +636,7 @@ LEFT JOIN project p ON p.id = f.project_id
 LEFT JOIN agent_runtime rt ON rt.id = f.runtime_id
 LEFT JOIN durations d ON d.agent_id = f.agent_id AND d.workspace_id = f.workspace_id
 LEFT JOIN workspace_durations wd ON wd.workspace_id = f.workspace_id
+LEFT JOIN issue_counts ic ON ic.workspace_id = f.workspace_id
 GROUP BY 1, 2
 ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC, 2 ASC
 LIMIT sqlc.arg('limit')::int;

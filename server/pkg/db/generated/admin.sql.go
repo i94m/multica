@@ -1220,6 +1220,13 @@ workspace_durations AS (
     SELECT workspace_id, sum(seconds)::bigint AS seconds
     FROM durations
     GROUP BY 1
+),
+issue_counts AS (
+    SELECT i.workspace_id, count(*)::bigint AS issues
+    FROM issue i
+    WHERE i.created_at >= $3::timestamptz
+      AND i.created_at < $4::timestamptz
+    GROUP BY 1
 )
 SELECT
     CASE $1::text
@@ -1255,7 +1262,11 @@ SELECT
         WHEN 'workspace' THEN max(coalesce(wd.seconds, 0))
         WHEN 'agent' THEN max(coalesce(d.seconds, 0))
         ELSE 0
-    END)::bigint AS duration_seconds
+    END)::bigint AS duration_seconds,
+    (CASE $1::text
+        WHEN 'workspace' THEN max(coalesce(ic.issues, 0))
+        ELSE 0
+    END)::bigint AS issue_count
 FROM filtered f
 JOIN workspace w ON w.id = f.workspace_id
 LEFT JOIN agent a ON a.id = f.agent_id
@@ -1263,6 +1274,7 @@ LEFT JOIN project p ON p.id = f.project_id
 LEFT JOIN agent_runtime rt ON rt.id = f.runtime_id
 LEFT JOIN durations d ON d.agent_id = f.agent_id AND d.workspace_id = f.workspace_id
 LEFT JOIN workspace_durations wd ON wd.workspace_id = f.workspace_id
+LEFT JOIN issue_counts ic ON ic.workspace_id = f.workspace_id
 GROUP BY 1, 2
 ORDER BY coalesce(sum(f.input_tokens + f.output_tokens + f.cache_read_tokens), 0) DESC, 2 ASC
 LIMIT $2::int
@@ -1296,6 +1308,7 @@ type ListAdminUsageByDimensionRow struct {
 	AgentCount       int64              `json:"agent_count"`
 	LastBucket       pgtype.Timestamptz `json:"last_bucket"`
 	DurationSeconds  int64              `json:"duration_seconds"`
+	IssueCount       int64              `json:"issue_count"`
 }
 
 // One aggregate query behind every ranking: the dimension switch groups by a
@@ -1303,6 +1316,8 @@ type ListAdminUsageByDimensionRow struct {
 // Wall-clock time the agents actually spent running tasks that finished inside
 // the same window. Tasks carry no workspace column, so the agent join supplies
 // it; per-agent rows keep their own bucket and workspace rows roll up.
+// Issues opened inside the window, so the column follows the range like every
+// other number on the row instead of showing a lifetime total.
 func (q *Queries) ListAdminUsageByDimension(ctx context.Context, arg ListAdminUsageByDimensionParams) ([]ListAdminUsageByDimensionRow, error) {
 	rows, err := q.db.Query(ctx, listAdminUsageByDimension,
 		arg.GroupBy,
@@ -1338,6 +1353,7 @@ func (q *Queries) ListAdminUsageByDimension(ctx context.Context, arg ListAdminUs
 			&i.AgentCount,
 			&i.LastBucket,
 			&i.DurationSeconds,
+			&i.IssueCount,
 		); err != nil {
 			return nil, err
 		}

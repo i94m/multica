@@ -70,6 +70,7 @@ type adminUsageRow struct {
 	TaskCount        int64   `json:"task_count"`
 	AgentCount       int64   `json:"agent_count"`
 	DurationSeconds  int64   `json:"duration_seconds"`
+	IssueCount       int64   `json:"issue_count"`
 	LastActiveAt     string  `json:"last_active_at,omitempty"`
 }
 
@@ -213,6 +214,7 @@ func (h *Handler) Usage(w http.ResponseWriter, r *http.Request) {
 			TaskCount:        row.TaskCount,
 			AgentCount:       row.AgentCount,
 			DurationSeconds:  row.DurationSeconds,
+			IssueCount:       row.IssueCount,
 			LastActiveAt:     timestampString(row.LastBucket),
 		}
 	}

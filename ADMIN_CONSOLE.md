@@ -61,8 +61,9 @@ defaults to the last 7 days and accepts `from` / `to` as RFC3339 or
 `runtime`, `provider`), and filters by `workspace_id`, `provider`, and `model`.
 Workspaces with fewer than 5 issues are excluded so personal scratch
 workspaces do not distort the cross-workspace totals. Rankings also carry the
-workspace issue count and the wall-clock time agents spent on tasks that
-finished inside the range (workspace and agent groupings only). `/usage/trend` buckets
+number of issues opened inside the range and the wall-clock time agents spent
+on tasks that finished inside it (the latter on workspace and agent groupings
+only). `/usage/trend` buckets
 the same filters by `day` or `week`; `/usage/matrix` returns the
 workspace × model cells.
 
