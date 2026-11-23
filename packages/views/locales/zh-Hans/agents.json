@@ -744,7 +744,7 @@
       "global_hint": "自动应用于所有 agent",
       "global_notice": "全局 skill 自动应用于所有 agent，无法在此单独关闭。",
       "role_badge": "角色内置",
-      "role_hint": "由该智能体绑定的角色内置。要调整这组技能，请到平台管理后台修改角色。"
+      "role_hint": "由该智能体绑定的角色内置。要调整这组 Skills，请到平台管理后台修改角色。"
     },
     "integrations": {
       "members_note": "在智能体主页查看和管理消息渠道。"
@@ -1118,15 +1118,15 @@
     "none": "不使用角色",
     "view_instructions": "查看角色提示词",
     "no_instructions": "该角色没有提示词。",
-    "skills_label": "此角色赋予的技能",
-    "skills_empty": "此角色没有配置技能。",
+    "skills_label": "此角色赋予的 Skills",
+    "skills_empty": "此角色没有配置 Skills。",
     "supplement_hint": "这里的提示词会追加在角色提示词之后，用于补充说明这个智能体的特殊要求。"
   },
   "roles": {
     "title": "角色",
     "tagline": "可被多个智能体复用的共享提示词。",
     "new_role": "新建角色",
-    "loading": "正在加载角色…",
+    "loading": "正在加载角色...",
     "empty_title": "还没有角色",
     "empty_description": "创建一次角色，之后在每个智能体上选择即可。",
     "create_title": "新建角色",
@@ -1147,7 +1147,7 @@
     "edit": "编辑",
     "delete": "删除",
     "delete_title": "删除角色？",
-    "delete_description": "“{{name}}”正被 {{count}} 个智能体使用。删除后它们会保留自己的指令，但不再继承此角色。",
+    "delete_description": "\"{{name}}\" 正被 {{count}} 个智能体使用。删除后它们会保留自己的指令，但不再继承此角色。",
     "delete_confirm": "删除角色",
     "saved": "角色已保存",
     "deleted": "角色已删除",
@@ -1156,12 +1156,12 @@
     "name_required": "名称为必填项",
     "cancel": "取消",
     "save": "保存",
-    "saving": "保存中…",
-    "skills_button": "技能",
-    "skills_dialog_title": "此角色下发的技能",
-    "skills_dialog_hint": "绑定此角色的所有智能体都会自动获得这些技能，无法在单个智能体上关闭。",
-    "skills_dialog_empty": "还没有可用的技能。",
-    "skills_saved": "角色技能已保存",
-    "skills_save_failed": "无法保存角色技能"
+    "saving": "保存中...",
+    "skills_button": "Skills",
+    "skills_dialog_title": "此角色下发的 Skills",
+    "skills_dialog_hint": "绑定此角色的所有智能体都会自动获得这些 Skills，无法在单个智能体上关闭。",
+    "skills_dialog_empty": "还没有可用的 Skills。",
+    "skills_saved": "角色 Skills 已保存",
+    "skills_save_failed": "无法保存角色 Skills"
   }
 }
