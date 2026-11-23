@@ -11,9 +11,8 @@ import { useInboxFilterStore } from "@multica/core/inbox/filter-store";
 import { inboxListOptions, snoozedInboxOptions } from "@multica/core/inbox/queries";
 import { useInboxSelectionStore } from "@multica/core/inbox/selection-store";
 import { childIssuesOptions, issueDetailOptions, issueSubscribersOptions } from "@multica/core/issues/queries";
-import { notificationPreferenceKeys } from "@multica/core/notification-preferences/queries";
 import { agentListOptions } from "@multica/core/workspace/queries";
-import type { Agent, InboxItem, Issue, SnoozedInboxIssue } from "@multica/core/types";
+import type { Agent, AgentTask, InboxItem, Issue, SnoozedInboxIssue } from "@multica/core/types";
 import { renderWithI18n } from "../../../test/i18n";
 import { NavigationProvider, type NavigationAdapter } from "../../../navigation";
 import { takeInboxUndo } from "../../../inbox/components/inbox-undo-toast";
@@ -23,6 +22,8 @@ const state = vi.hoisted(() => ({
   archiveInbox: vi.fn(),
   unarchiveInbox: vi.fn(() => Promise.resolve()),
   unsubscribeArchive: vi.fn(),
+  markRead: vi.fn(),
+  markUnread: vi.fn(),
   snooze: vi.fn(() => Promise.resolve()),
   unsnooze: vi.fn(() => Promise.resolve()),
 }));
@@ -40,6 +41,8 @@ vi.mock("@multica/core/inbox/mutations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@multica/core/inbox/mutations")>()),
   useUnsubscribeArchiveInbox: () => ({ mutate: state.unsubscribeArchive }),
   undoUnsubscribeArchiveInbox: vi.fn(),
+  useMarkInboxRead: () => ({ mutate: state.markRead }),
+  useMarkInboxUnread: () => ({ mutate: state.markUnread }),
   useSnoozeInbox: () => ({ mutateAsync: state.snooze }),
   useUnsnoozeInbox: () => ({ mutateAsync: state.unsnooze }),
   cachedInboxSnoozedUntil: () => null,
@@ -283,11 +286,22 @@ describe("IssueInboxBar", () => {
     });
   });
 
-  it("offers snooze in place of a read toggle", () => {
+  it("offers mark unread and read toggle alongside snooze", () => {
+    state.markRead.mockClear();
+    state.markUnread.mockClear();
+    useInboxSelectionStore.setState({ manualUnreadIdByWorkspace: {} });
     setup();
-    expect(screen.queryByRole("button", { name: "Mark as unread" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
     expect(screen.getByRole("button", { name: "Snooze" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as unread" }));
+    expect(state.markUnread).toHaveBeenCalledWith("n-1", expect.any(Object));
+    expect(useInboxSelectionStore.getState().manualUnreadIdByWorkspace.ws).toBe("n-1");
+    cleanup();
+
+    setup({ rows: [{ ...ROWS[0]!, read: false }, ROWS[1]!] });
+    fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    expect(state.markRead).toHaveBeenCalledWith("n-1", expect.any(Object));
+    expect(useInboxSelectionStore.getState().manualUnreadIdByWorkspace.ws).toBeUndefined();
   });
 
   it("snoozes and moves on to the next notification", async () => {
@@ -561,25 +575,47 @@ describe("IssueInboxBar once an action is undone", () => {
     expect(document.querySelector("[data-inbox-bar]")).not.toBeNull();
   });
 
-  it("opens the next notification immediately without a countdown when after_auto_archive=next", async () => {
-    const focusSpy = vi.spyOn(document, "hasFocus").mockReturnValue(true);
-    try {
-      const nav = setup();
-      act(() => {
-        nav.qc.setQueryData(notificationPreferenceKeys.all("ws"), {
-          workspace_id: "ws",
-          preferences: { after_auto_archive: "next" },
-        });
-      });
-      noteInboxBarAction("issue-1", { type: "status", status: "done" });
-      noteInboxAutoArchive({ issue_id: "issue-1", reason: "actor_acted" });
-      act(() => nav.qc.setQueryData(inboxListOptions("ws").queryKey, [ROWS[1]!]));
+  it("stays on the issue in place when completing an issue auto-archives it", async () => {
+    const nav = setup();
+    noteInboxBarAction("issue-1", { type: "status", status: "done" });
+    noteInboxAutoArchive({ issue_id: "issue-1", reason: "issue_status_terminal" });
+    act(() => nav.qc.setQueryData(inboxListOptions("ws").queryKey, [ROWS[1]!]));
 
-      await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/acme/inbox?issue=issue-2"));
-      expect(toast.success).toHaveBeenCalledWith("Notification archived", expect.anything());
-      expect(document.querySelector("[data-inbox-auto-advance-bar]")).toBeNull();
-    } finally {
-      focusSpy.mockRestore();
-    }
+    expect(await screen.findByText("Changed to Done · Notification archived")).toBeInTheDocument();
+    expect(nav.push).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(document.querySelector("[data-inbox-auto-advance-bar]")).toBeNull();
+  });
+
+  it("stays on the issue with live agent status when triggering an agent archives it", async () => {
+    const nav = setup();
+    act(() => {
+      nav.qc.setQueryData(agentListOptions("ws").queryKey, [{ id: "agent-1", name: "Emacs" } as Agent]);
+      nav.qc.setQueryData(agentTaskSnapshotOptions("ws").queryKey, [
+        { id: "task-1", issue_id: "issue-1", agent_id: "agent-1", status: "running" } as AgentTask,
+      ]);
+    });
+    noteInboxAutoArchive({ issue_id: "issue-1", reason: "actor_acted", trigger: "agent_triggered" });
+    act(() => nav.qc.setQueryData(inboxListOptions("ws").queryKey, [ROWS[1]!]));
+
+    const statusBar = await screen.findByRole("status");
+    expect(statusBar).toHaveTextContent("Emacs is working");
+    expect(statusBar).toHaveTextContent("Returns to Inbox on new activity");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(nav.push).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: "e", code: "KeyE" });
+    expect(nav.push).toHaveBeenCalledWith("/acme/inbox?issue=issue-2");
+  });
+
+  it("shows fallback agent-triggered copy before the agent snapshot updates", async () => {
+    const nav = setup();
+    noteInboxAutoArchive({ issue_id: "issue-1", reason: "actor_acted", trigger: "agent_triggered" });
+    act(() => nav.qc.setQueryData(inboxListOptions("ws").queryKey, [ROWS[1]!]));
+
+    expect(await screen.findByText("Agent triggered")).toBeInTheDocument();
+    expect(screen.getByText("Returns to Inbox on new activity")).toBeInTheDocument();
+    expect(nav.push).not.toHaveBeenCalled();
   });
 });

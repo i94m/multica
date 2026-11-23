@@ -2,11 +2,22 @@
 
 import { useMemo, useRef, type ReactNode, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlarmClock, Archive, ChevronDown } from "@multica/ui/icons";
+import { AlarmClock, Archive, Bot, Check, ChevronDown, CircleDot } from "@multica/ui/icons";
+import { ShimmerText } from "@multica/ui/components/common/shimmer-text";
+import { IconButton } from "@multica/ui/components/common/icon-button";
 import { Button } from "@multica/ui/components/ui/button";
+import { cn } from "@multica/ui/lib/utils";
+import { toast } from "sonner";
 import { useWorkspaceId } from "@multica/core/hooks";
-import type { InboxUnsubscribeScope } from "@multica/core/inbox/mutations";
-import type { LastInboxCleared } from "@multica/core/inbox/selection-store";
+import {
+  useMarkInboxRead,
+  useMarkInboxUnread,
+  type InboxUnsubscribeScope,
+} from "@multica/core/inbox/mutations";
+import {
+  useInboxSelectionStore,
+  type LastInboxCleared,
+} from "@multica/core/inbox/selection-store";
 import type { InboxItem } from "@multica/core/types";
 import { findSnoozedInboxIssue, snoozedInboxOptions } from "@multica/core/inbox/queries";
 import { nextInboxRow } from "@multica/core/inbox/open-row";
@@ -23,16 +34,19 @@ import { useFilteredInboxRows } from "../../inbox/components/use-filtered-inbox-
 import { inboxTabHref } from "../../inbox/components/inbox-view";
 import { UnsubscribeArchiveButton } from "../../inbox/components/unsubscribe-archive-button";
 import { useUnsubscribeArchive } from "../../inbox/components/use-unsubscribe-archive";
-import { useMoveOnAfterAutoArchive } from "../../inbox/components/use-move-on-after-auto-archive";
+import { useAutoArchiveCause } from "../../inbox/components/use-auto-archive-cause";
 import {
   clearedLabelForItem,
   useArchiveInboxWithUndo,
   useLeaveInboxRow,
   useRestoreInbox,
 } from "../../inbox/components/use-leave-inbox-row";
+import { ActionShortcutKeycaps } from "../../common/shortcut-keycaps";
+import { AgentAvatarStack } from "../../agents/components/agent-avatar-stack";
 import { useBuiltinViewNavigation } from "../../issue-views/builtin-views";
 import { useNavigation } from "../../navigation";
 import { useLocale, useT } from "../../i18n";
+import { useIssueAgentState } from "../surface/use-issue-agent-state";
 
 /**
  * The Inbox page's bar over an open issue notification: why it is here,
@@ -56,10 +70,13 @@ export function IssueInboxBar({
   issueId,
   issueActions,
   movingOn = false,
+  isSnoozedView = false,
 }: {
   issueId: string;
   issueActions?: ReactNode;
   movingOn?: boolean;
+  /** Opened from the Snoozed tab: show only its snooze bar without touching the live Inbox list. */
+  isSnoozedView?: boolean;
 }) {
   const { t } = useT("inbox");
   const wsId = useWorkspaceId();
@@ -67,7 +84,7 @@ export function IssueInboxBar({
   const { push } = useNavigation();
   const builtinNav = useBuiltinViewNavigation();
   const guest = useIsGuest(wsId);
-  const { rows, kept, filtered } = useFilteredInboxRows(wsId, issueId);
+  const { rows, kept, filtered } = useFilteredInboxRows(wsId, isSnoozedView ? null : issueId, !isSnoozedView);
   const index = rows.findIndex((row) => row.issue_id === issueId);
   const row = index >= 0 ? rows[index]! : null;
   // A row kept after it left the Inbox on its own is no longer there to act on.
@@ -84,6 +101,8 @@ export function IssueInboxBar({
   const archiveWithUndo = useArchiveInboxWithUndo();
   const restore = useRestoreInbox();
   const unsubscribeArchive = useUnsubscribeArchive();
+  const markRead = useMarkInboxRead();
+  const markUnread = useMarkInboxUnread();
   const { snooze, unsnooze } = useInboxSnooze();
   const { data: snoozedList } = useQuery(snoozedInboxOptions(wsId));
   const snoozed = item ? undefined : findSnoozedInboxIssue(snoozedList, issueId);
@@ -92,6 +111,7 @@ export function IssueInboxBar({
     return (snoozedList ?? []).filter((entry) => new Date(entry.snoozed_until).getTime() > now).length;
   }, [snoozedList]);
   const keptText = useKeptInboxRowText(wsId);
+  const agents = useIssueAgentState(wsId, issueId);
   const [snoozeOpen, setSnoozeOpen] = useState(false);
 
   const archiveItem = () => {
@@ -161,7 +181,7 @@ export function IssueInboxBar({
       : undefined;
     leave(issueId, next, cleared);
   };
-  const cause = useMoveOnAfterAutoArchive({ settled, next, onNext: moveOn });
+  const { cause, reason: archiveReason } = useAutoArchiveCause(settled);
 
   // Archived already, E moves on (to the next notification or Inbox Zero).
   useInboxShortcut("archiveInboxItem", item ? archiveItem : settled ? moveOn : null);
@@ -195,9 +215,55 @@ export function IssueInboxBar({
       return null;
     }
     const inboxCleared = !next && !filtered;
+    const showAgentWorking =
+      settled.reason === "archived" &&
+      !keptText.isFinished(settled.item) &&
+      (archiveReason === "agent_triggered" || (agents !== null && !cause));
+    const fallbackAgentId =
+      cause?.type === "assignee" && cause.assignee?.type === "agent" ? cause.assignee.id : null;
+    const settledIcon = showAgentWorking ? (
+      agents && agents.agentIds.length > 0 ? (
+        <AgentAvatarStack
+          agentIds={agents.agentIds}
+          size="xs"
+          max={2}
+          opacity={agents.running ? "full" : "half"}
+        />
+      ) : fallbackAgentId ? (
+        <AgentAvatarStack agentIds={[fallbackAgentId]} size="xs" max={2} opacity="half" />
+      ) : (
+        <Bot className="text-info" />
+      )
+    ) : undefined;
+    const agentWorkingText = showAgentWorking
+      ? (keptText.agentLabel(agents) ?? t(($) => $.kept.agent_triggered))
+      : null;
+    const settledLabel =
+      showAgentWorking && agentWorkingText ? (
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1.5">
+          <ShimmerText
+            active={!!agents?.running}
+            className={cn(
+              "shrink-0 font-medium",
+              agents?.running ? "text-foreground" : "text-muted-foreground",
+            )}
+          >
+            {agentWorkingText}
+          </ShimmerText>
+          <span aria-hidden className="text-faint-foreground @max-[32rem]/inbox-bar:hidden">
+            ·
+          </span>
+          <span className="truncate text-muted-foreground @max-[32rem]/inbox-bar:hidden">
+            {t(($) => $.kept.returns_on_activity)}
+          </span>
+        </span>
+      ) : (
+        keptText.notice(settled, cause)
+      );
     return (
       <InboxKeptActions
-        label={keptText.notice(settled, cause)}
+        icon={settledIcon}
+        label={settledLabel}
         issueActions={settled.reason === "archived" ? issueActions : undefined}
         onUndo={() => restore(settled.item.id, { quiet: true })}
         next={next}
@@ -217,8 +283,45 @@ export function IssueInboxBar({
     );
   }
 
+  const toggleReadItem = () => {
+    if (!item) return;
+    const store = useInboxSelectionStore.getState();
+    if (item.read === true) {
+      store.markManualUnread(wsId, item.id);
+      markUnread.mutate(item.id, {
+        onError: (err) => {
+          store.clearManualUnread(wsId, item.id);
+          toast.error(
+            err instanceof Error && err.message
+              ? err.message
+              : t(($) => $.errors.mark_unread_failed),
+          );
+        },
+      });
+    } else {
+      store.clearManualUnread(wsId, item.id);
+      markRead.mutate(item.id, {
+        onError: (err) =>
+          toast.error(
+            err instanceof Error && err.message
+              ? err.message
+              : t(($) => $.errors.mark_read_failed),
+          ),
+      });
+    }
+  };
+
   return (
     <InboxOpenBar item={item} issueActions={issueActions}>
+      <IconButton
+        label={item.read === true ? t(($) => $.context_menu.mark_unread) : t(($) => $.context_menu.mark_read)}
+        shortcut={<ActionShortcutKeycaps action="markInboxUnread" />}
+        tooltipSide="bottom"
+        className="text-muted-foreground"
+        onClick={toggleReadItem}
+      >
+        {item.read === true ? <CircleDot /> : <Check />}
+      </IconButton>
       <UnsubscribeArchiveButton issueId={issueId} userId={item.recipient_id} onConfirm={unsubscribeItem} />
       <InboxSnoozeMenu
         open={snoozeOpen}
