@@ -302,6 +302,27 @@ export function createEnDict(): LandingDict {
     },
     entries: [
       {
+        version: "0.12.2",
+        date: "2026-11-24",
+        title: "Quick-switch agents when creating Issues, see usage by squad, and leave squad handoffs out of your Inbox",
+        changes: [],
+        features: [
+          "Create with agent shows your three most-used agents and squads; click one or press Alt/Option + 1–3 to switch.",
+          "Turn off Include squad handoffs in Settings → Notifications to keep squad agents' handoff comments out of your Inbox.",
+          "On Analytics, filter usage by squad or group the leaderboard and errors by squad, with a breakdown per member.",
+        ],
+        improvements: [
+          "Inbox actions sit above the reply box, and after you archive the last notification, it still shows Archived with Undo.",
+          "A squad working on an Issue shows as one squad avatar in headers, sidebars, and Working now.",
+          "The Issue sidebar hides empty sections behind one Add row, and sub-issues move to the main column.",
+          "Jump to latest moves to the right and counts new comments, in the Inbox and on Issue pages.",
+        ],
+        fixes: [
+          "Tooltips no longer cover the next row in dense lists such as the Inbox and sidebar.",
+          "With reduced motion on, dialogs and menus close right away, and select dropdowns no longer lag when closing.",
+        ],
+      },
+      {
         version: "0.12.1",
         date: "2026-11-24",
         title: "Triage the Inbox with J, K, and U, follow agent runs in place, and smoother animations",

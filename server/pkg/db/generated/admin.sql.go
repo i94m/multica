@@ -1195,7 +1195,7 @@ func (q *Queries) ListAdminTasks(ctx context.Context, arg ListAdminTasksParams) 
 
 const listAdminUsageByDimension = `-- name: ListAdminUsageByDimension :many
 WITH filtered AS (
-    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens, h.squad_id
     FROM task_usage_hourly h
     WHERE h.bucket_hour >= $3::timestamptz
       AND h.bucket_hour < $4::timestamptz
@@ -1367,7 +1367,7 @@ func (q *Queries) ListAdminUsageByDimension(ctx context.Context, arg ListAdminUs
 
 const listAdminUsageMatrix = `-- name: ListAdminUsageMatrix :many
 WITH filtered AS (
-    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens, h.squad_id
     FROM task_usage_hourly h
     WHERE h.bucket_hour >= $1::timestamptz
       AND h.bucket_hour < $2::timestamptz
@@ -1451,7 +1451,7 @@ func (q *Queries) ListAdminUsageMatrix(ctx context.Context, arg ListAdminUsageMa
 
 const listAdminUsageTrend = `-- name: ListAdminUsageTrend :many
 WITH filtered AS (
-    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens
+    SELECT h.bucket_hour, h.workspace_id, h.runtime_id, h.agent_id, h.project_id, h.provider, h.model, h.input_tokens, h.output_tokens, h.cache_read_tokens, h.cache_write_tokens, h.task_count, h.event_count, h.updated_at, h.cost_usd_ticks, h.uncosted_input_tokens, h.uncosted_output_tokens, h.uncosted_cache_read_tokens, h.uncosted_cache_write_tokens, h.squad_id
     FROM task_usage_hourly h
     WHERE h.bucket_hour >= $2::timestamptz
       AND h.bucket_hour < $3::timestamptz
