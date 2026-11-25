@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { agentRoleListOptions } from "@multica/core/agents";
-import { useWorkspaceId } from "@multica/core/hooks";
+import { useCurrentWorkspace } from "@multica/core/paths";
 import { Button } from "@multica/ui/components/ui/button";
 import {
   Popover,
@@ -38,7 +38,10 @@ export function AgentRoleSelect({
   disabled?: boolean;
   id?: string;
 }) {
-  const wsId = useWorkspaceId();
+  // The inspector always renders inside a workspace route, but tests and the
+  // settings-level preview mount it without one; an absent workspace just
+  // leaves the role list empty instead of throwing.
+  const wsId = useCurrentWorkspace()?.id ?? "";
   const { t } = useT("agents");
   const { data: roles = [], isLoading } = useQuery(agentRoleListOptions(wsId));
   // Every visible role is selectable, including global roles: choosing one for
