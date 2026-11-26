@@ -379,3 +379,20 @@ ORDER BY version DESC;
 -- name: GetSkillVersion :one
 SELECT * FROM skill_version
 WHERE skill_id = $1 AND workspace_id = $2 AND version = $3;
+
+-- name: ListWorkspaceSkillsForAdmin :many
+-- Admin console read: skills a workspace owns, so the console can promote one
+-- to the global pool. Global skills are excluded — they are already there.
+SELECT * FROM skill
+WHERE workspace_id = $1
+ORDER BY lower(name);
+
+-- name: ListGlobalSkillRoleGrants :many
+-- Admin console read: which roles grant each global skill, so the pool page
+-- can show impact before a skill is demoted back to a workspace.
+SELECT ars.skill_id, r.name AS role_name
+FROM agent_role_skill ars
+JOIN agent_role r ON r.id = ars.role_id
+JOIN skill s ON s.id = ars.skill_id
+WHERE s.workspace_id IS NULL
+ORDER BY lower(r.name);

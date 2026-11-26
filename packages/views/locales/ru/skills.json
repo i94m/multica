@@ -51,10 +51,7 @@
     "source_runtime_unknown": "Из среды выполнения",
     "source_clawhub": "Из ClawHub",
     "source_skills_sh": "Из Skills.sh",
-    "source_github": "Из GitHub",
-    "global": "Глобальный",
-    "role": "Роль",
-    "role_none": "Без роли"
+    "source_github": "Из GitHub"
   },
   "actions": {
     "row_menu": "Действия",
@@ -107,23 +104,7 @@
     "updated_toast_few": "Обновлено навыков из источника: {{count}}",
     "updated_toast_many": "Обновлено навыков из источника: {{count}}",
     "added_multi_toast_few": "Добавлено агентам: {{count}}",
-    "added_multi_toast_many": "Добавлено агентам: {{count}}",
-    "set_global": "Сделать глобальным",
-    "move_to_workspace": "Отменить глобальность",
-    "global_dialog_title": "Сделать навык глобальным?",
-    "global_dialog_description": "«{{name}}» станет доступен во всех рабочих пространствах. Любой участник сможет добавить его агентам; изменять его смогут только владельцы и администраторы рабочих пространств.",
-    "global_dialog_warning": "Это затронет все рабочие пространства. Позже навык можно вернуть в рабочее пространство.",
-    "global_dialog_confirm": "Сделать глобальным",
-    "move_dialog_title": "Переместить навык в текущее рабочее пространство?",
-    "move_dialog_description": "«{{name}}» перестанет быть глобальным и станет навыком этого рабочего пространства.",
-    "move_dialog_confirm": "Переместить в рабочее пространство",
-    "globalized_toast": "Навык теперь глобальный",
-    "moved_to_workspace_toast": "Навык перемещён в это рабочее пространство",
-    "scope_failed_toast": "Не удалось изменить область навыка",
-    "saving_scope": "Сохранение…",
-    "delete_global_blocked": "Сначала отмените глобальность, чтобы удалить",
-    "scope_updated_toast": "Обновлён глобальный статус навыков: {{count}}",
-    "scope_update_failed_toast": "Не удалось обновить глобальный статус"
+    "added_multi_toast_many": "Добавлено агентам: {{count}}"
   },
   "toolbar": {
     "section_usage": "Использование",

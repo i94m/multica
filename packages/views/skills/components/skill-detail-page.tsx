@@ -18,7 +18,6 @@ import {
   ChevronRight,
   File,
   FileText,
-  Globe,
   History,
   Link2,
   Loader2,
@@ -102,7 +101,6 @@ import {
   AddToAgentDialog,
   type SkillActionsContext,
 } from "./skill-list-actions";
-import { GlobalSkillScopeDialog } from "./global-skill-scope-dialog";
 import { RefreshSkillDialog } from "./refresh-skill-dialog";
 import { SkillVersionsTab } from "./skill-versions-tab";
 import { useT } from "../../i18n";
@@ -428,12 +426,11 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
     () => members.find((m) => m.user_id === currentUserId)?.role ?? null,
     [members, currentUserId],
   );
-  const isAdmin = myRole === "owner" || myRole === "admin";
   const actionsCtx: SkillActionsContext = {
     wsId,
     agents,
     currentUserId,
-    isAdmin,
+    isAdmin: myRole === "owner" || myRole === "admin",
   };
 
   const [name, setName] = useState("");
@@ -445,7 +442,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmRefresh, setConfirmRefresh] = useState(false);
-  const [confirmScope, setConfirmScope] = useState(false);
   const [showAddToAgents, setShowAddToAgents] = useState(false);
   const [addingFile, setAddingFile] = useState(false);
   const [conflictPending, setConflictPending] = useState(false);
@@ -710,12 +706,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
 
   const handleDelete = async () => {
     if (!skill) return;
-    // Global skills are the shared library: cancel the global scope first.
-    if (!skill.workspace_id) {
-      toast.error(t(($) => $.actions.delete_global_blocked));
-      setConfirmDelete(false);
-      return;
-    }
     setDeleting(true);
     try {
       await api.deleteSkill(skill.id);
@@ -911,14 +901,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
             <Link2 />
             {t(($) => $.detail.menu.copy_link)}
           </DropdownMenuItem>
-          {isAdmin && (
-            <DropdownMenuItem onClick={() => setConfirmScope(true)}>
-              <Globe />
-              {skill.scope === "global"
-                ? t(($) => $.actions.move_to_workspace)
-                : t(($) => $.actions.set_global)}
-            </DropdownMenuItem>
-          )}
           <DropdownMenuItem onClick={openVersions}>
             <History />
             {t(($) => $.detail.menu.version_history)}
@@ -934,12 +916,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 variant="destructive"
-                disabled={skill.scope === "global"}
-                title={
-                  skill.scope === "global"
-                    ? t(($) => $.actions.delete_global_blocked)
-                    : undefined
-                }
                 onClick={() => setConfirmDelete(true)}
               >
                 <Trash2 />
@@ -972,11 +948,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
     <span className="flex min-w-0 items-center gap-1.5 text-foreground">
       <SkillIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="truncate">{displayName}</span>
-      {skill.scope === "global" && (
-        <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
-          {t(($) => $.table.global)}
-        </span>
-      )}
     </span>
   );
 
@@ -1281,13 +1252,6 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <GlobalSkillScopeDialog
-        skill={skill}
-        wsId={wsId}
-        open={confirmScope}
-        onOpenChange={setConfirmScope}
-      />
 
       <AddToAgentDialog
         skills={[skill]}

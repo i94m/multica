@@ -94,9 +94,9 @@ Only members who can modify the agent can add, remove, or disable its skills.
 
 ## Global skills
 
-Workspace `owner`s and `admin`s can make a skill global from the skill page. A global skill is not owned by one workspace: every workspace can see it, and it applies to every agent automatically — there is nothing to attach or toggle per agent. Any member can use it, but only workspace `owner`s and `admin`s can edit or delete it.
+The global pool is managed in the platform console (**Admin → Skills**), not from a workspace skill page. A platform admin picks a workspace and promotes one of its skills into the pool; every workspace then sees it, and it applies to every agent automatically — there is nothing to attach or toggle per agent. Roles can grant global skills, so an agent bound to such a role inherits them too. Any member can use a global skill.
 
-To stop sharing a skill, choose **Move to this workspace** on a global skill. It becomes a normal skill of the workspace you are currently in. Global skills do not use workspace labels.
+To stop sharing a skill, move it back to a workspace in **Admin → Skills**. It becomes a normal skill of the workspace you pick, and only then can it be edited or deleted. Global skills do not use workspace labels.
 
 ## Workspace skills and repository skills
 

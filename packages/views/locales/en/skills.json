@@ -36,7 +36,6 @@
     "supporting_data_warning": "Some workspace data failed to load. Creator attribution, runtime names, or edit permissions may appear incomplete."
   },
   "table": {
-    "global": "Global",
     "name": "Name",
     "created_by": "Added by",
     "used_by": "Used by",
@@ -52,26 +51,11 @@
     "source_runtime_unknown": "From a runtime",
     "source_clawhub": "From ClawHub",
     "source_skills_sh": "From Skills.sh",
-    "source_github": "From GitHub",
-    "role": "Role",
-    "role_none": "No role"
+    "source_github": "From GitHub"
   },
   "actions": {
     "row_menu": "Actions",
     "add_to_agent": "Add to agent",
-    "set_global": "Set as global",
-    "move_to_workspace": "Cancel global",
-    "global_dialog_title": "Make this skill global?",
-    "global_dialog_description": "\"{{name}}\" will be available to every workspace. All members can add it to agents; only workspace owners and admins can edit it.",
-    "global_dialog_warning": "This affects every workspace. You can move the skill back to a workspace later.",
-    "global_dialog_confirm": "Make global",
-    "move_dialog_title": "Move this skill to the current workspace?",
-    "move_dialog_description": "\"{{name}}\" will stop being global and become a skill of this workspace.",
-    "move_dialog_confirm": "Move to workspace",
-    "globalized_toast": "Skill is now global",
-    "moved_to_workspace_toast": "Skill moved to this workspace",
-    "scope_failed_toast": "Failed to change skill scope",
-    "saving_scope": "Saving...",
     "refresh": "Update from source",
     "my_agents": "My agents",
     "other_agents": "Other agents",
@@ -106,10 +90,7 @@
     "add_confirm": "Add ({{num}})",
     "adding": "Adding...",
     "added_multi_toast_one": "Added to {{count}} agent",
-    "added_multi_toast_other": "Added to {{count}} agents",
-    "delete_global_blocked": "Cancel global before deleting",
-    "scope_updated_toast": "Updated the global state of {{count}} skills",
-    "scope_update_failed_toast": "Could not update the global state"
+    "added_multi_toast_other": "Added to {{count}} agents"
   },
   "toolbar": {
     "section_usage": "Usage",

@@ -14,6 +14,7 @@ const en = {
     runtimes: "Runtimes",
     usage: "Usage",
     roles: "Roles",
+    skills: "Skills",
   },
   common: {
     search: "Search",
@@ -170,6 +171,25 @@ const en = {
     skillsSaved: "Role skills saved",
     skillsSaveFailed: "Could not save role skills",
   },
+  skills: {
+    title: "Global skills",
+    description: "Skills every workspace can use. This pool is the only source a role may grant, and only this page changes a skill's scope.",
+    promote: "Make global",
+    promoteTitle: "Promote a workspace skill",
+    promoteBody: "Pick a workspace, then pick the skill to publish into every workspace.",
+    workspace: "Workspace",
+    pickWorkspace: "Pick a workspace to see the skills it owns.",
+    noWorkspaceSkills: "This workspace has no skills to promote.",
+    noRoles: "No role grants it",
+    name: "Skill",
+    rolesColumn: "Granted by roles",
+    updated: "Updated",
+    moveToWorkspace: "Move to workspace",
+    demoteTitle: "Move this skill to a workspace?",
+    demoteBody: "\u201c{name}\u201d stops being global and becomes a skill of the workspace you pick.",
+    demoteImpact: "Roles that grant it: {roles}",
+    empty: "No global skills yet.",
+  },
 } as const;
 
 type DeepString<T> = {
@@ -192,6 +212,7 @@ const zh: AdminCopy = {
     runtimes: "Runtime",
     usage: "用量",
     roles: "角色",
+    skills: "技能",
   },
   common: {
     search: "搜索",
@@ -347,6 +368,25 @@ const zh: AdminCopy = {
     deleteBody: "\u201c{name}\u201d 将被删除，绑定它的智能体会被解绑，它们自己的指令和技能不受影响。",
     skillsSaved: "角色技能已保存",
     skillsSaveFailed: "无法保存角色技能",
+  },
+  skills: {
+    title: "全局技能",
+    description: "所有工作区都能使用的技能。角色只能从这里挑选技能，也只有本页能改变技能的作用域。",
+    promote: "设为全局",
+    promoteTitle: "把工作区技能提升为全局",
+    promoteBody: "先选一个工作区，再选择要发布到所有工作区的技能。",
+    workspace: "工作区",
+    pickWorkspace: "选择工作区后可看到它拥有的技能。",
+    noWorkspaceSkills: "这个工作区没有可提升的技能。",
+    noRoles: "没有角色授予",
+    name: "技能",
+    rolesColumn: "授予它的角色",
+    updated: "更新时间",
+    moveToWorkspace: "移回工作区",
+    demoteTitle: "把这个技能移回工作区？",
+    demoteBody: "\u201c{name}\u201d 将不再是全局技能，而成为所选工作区的技能。",
+    demoteImpact: "授予它的角色：{roles}",
+    empty: "还没有全局技能。",
   },
 };
 

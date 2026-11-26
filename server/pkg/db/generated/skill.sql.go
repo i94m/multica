@@ -729,6 +729,42 @@ func (q *Queries) ListAgentSkillsByWorkspace(ctx context.Context, workspaceID pg
 	return items, nil
 }
 
+const listGlobalSkillRoleGrants = `-- name: ListGlobalSkillRoleGrants :many
+SELECT ars.skill_id, r.name AS role_name
+FROM agent_role_skill ars
+JOIN agent_role r ON r.id = ars.role_id
+JOIN skill s ON s.id = ars.skill_id
+WHERE s.workspace_id IS NULL
+ORDER BY lower(r.name)
+`
+
+type ListGlobalSkillRoleGrantsRow struct {
+	SkillID  pgtype.UUID `json:"skill_id"`
+	RoleName string      `json:"role_name"`
+}
+
+// Admin console read: which roles grant each global skill, so the pool page
+// can show impact before a skill is demoted back to a workspace.
+func (q *Queries) ListGlobalSkillRoleGrants(ctx context.Context) ([]ListGlobalSkillRoleGrantsRow, error) {
+	rows, err := q.db.Query(ctx, listGlobalSkillRoleGrants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGlobalSkillRoleGrantsRow{}
+	for rows.Next() {
+		var i ListGlobalSkillRoleGrantsRow
+		if err := rows.Scan(&i.SkillID, &i.RoleName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGlobalSkills = `-- name: ListGlobalSkills :many
 SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id, revision FROM skill
 WHERE workspace_id IS NULL
@@ -1184,6 +1220,46 @@ ORDER BY name ASC
 // Global skills (workspace_id IS NULL) are visible from every workspace.
 func (q *Queries) ListSkillsByWorkspace(ctx context.Context, workspaceID pgtype.UUID) ([]Skill, error) {
 	rows, err := q.db.Query(ctx, listSkillsByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Skill{}
+	for rows.Next() {
+		var i Skill
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.Description,
+			&i.Content,
+			&i.Config,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PluginInstallationID,
+			&i.Revision,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspaceSkillsForAdmin = `-- name: ListWorkspaceSkillsForAdmin :many
+SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id, revision FROM skill
+WHERE workspace_id = $1
+ORDER BY lower(name)
+`
+
+// Admin console read: skills a workspace owns, so the console can promote one
+// to the global pool. Global skills are excluded — they are already there.
+func (q *Queries) ListWorkspaceSkillsForAdmin(ctx context.Context, workspaceID pgtype.UUID) ([]Skill, error) {
+	rows, err := q.db.Query(ctx, listWorkspaceSkillsForAdmin, workspaceID)
 	if err != nil {
 		return nil, err
 	}

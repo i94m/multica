@@ -11,6 +11,7 @@ import {
   LogOut,
   Monitor,
   Shield,
+  Sparkles,
   Users,
 } from "@multica/ui/icons";
 import { useAuthStore } from "@multica/core/auth";
@@ -27,6 +28,7 @@ const navItems = [
   { key: "agents", href: adminPaths.agents(), icon: Bot },
   { key: "runtimes", href: adminPaths.runtimes(), icon: Monitor },
   { key: "roles", href: adminPaths.roles(), icon: Shield },
+  { key: "skills", href: adminPaths.skills(), icon: Sparkles },
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

@@ -99,21 +99,14 @@ function NameCell({ row }: { row: SkillRow }) {
       icon={<SkillIcon className="size-4 shrink-0 text-muted-foreground" />}
       title={skill.name}
       badges={
-        <>
-          {skill.scope === "global" && (
-            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">
-              {t(($) => $.table.global)}
-            </span>
-          )}
-          {!canEdit && (
-            <Tooltip>
-              <TooltipTrigger
-                render={<Lock className="h-3 w-3 shrink-0 text-faint-foreground" />}
-              />
-              <TooltipContent>{t(($) => $.table.lock_tooltip)}</TooltipContent>
-            </Tooltip>
-          )}
-        </>
+        !canEdit && (
+          <Tooltip>
+            <TooltipTrigger
+              render={<Lock className="h-3 w-3 shrink-0 text-faint-foreground" />}
+            />
+            <TooltipContent>{t(($) => $.table.lock_tooltip)}</TooltipContent>
+          </Tooltip>
+        )
       }
       description={skill.description || undefined}
     />
@@ -407,19 +400,6 @@ export default function SkillsPage() {
         core: true,
         hideable: true,
         cell: (row) => <UsedByCell agents={row.agents} />,
-      },
-      {
-        key: "role",
-        header: t(($) => $.table.role),
-        width: 152,
-        hideable: true,
-        cell: (row) => (
-          <span className="block min-w-0 truncate">
-            {row.skill.role_names?.length
-              ? row.skill.role_names.join(", ")
-              : t(($) => $.table.role_none)}
-          </span>
-        ),
       },
       {
         key: "source",

@@ -53,6 +53,12 @@ func RegisterRoutes(
 
 			// Roles are platform-level and maintained here: this is the only
 			// write surface in the console.
+			// The global skill pool: the only place a skill changes scope.
+			r.Get("/global-skills", h.ListGlobalSkillsPage)
+			r.Post("/skills/{id}/promote", h.PromoteSkill)
+			r.Post("/global-skills/{id}/demote", h.DemoteSkill)
+			r.Get("/workspaces/{id}/skills", h.ListWorkspaceSkillsPage)
+
 			r.Get("/agent-roles", h.ListAgentRoles)
 			r.Post("/agent-roles", h.CreateAgentRole)
 			r.Route("/agent-roles/{id}", func(r chi.Router) {
