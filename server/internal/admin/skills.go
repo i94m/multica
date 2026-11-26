@@ -17,12 +17,14 @@ import (
 // so a workspace owner cannot publish into every tenant by accident.
 
 type adminSkillResponse struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Roles       []string `json:"roles"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Roles        []string `json:"roles"`
+	CreatorName  string   `json:"creator_name"`
+	CreatorEmail string   `json:"creator_email"`
+	CreatedAt    string   `json:"created_at"`
+	UpdatedAt    string   `json:"updated_at"`
 }
 
 type adminWorkspaceSkillResponse struct {
@@ -36,15 +38,32 @@ type adminDemoteSkillRequest struct {
 	WorkspaceID string `json:"workspace_id"`
 }
 
-func globalSkillToResponse(skill db.Skill, roles []string) adminSkillResponse {
+// poolSkillToResponse renders one pool row: the list view needs the creator,
+// which the join carries, plus the roles that grant it.
+func poolSkillToResponse(row db.ListGlobalSkillsForAdminRow, roles []string) adminSkillResponse {
 	if roles == nil {
 		roles = []string{}
 	}
 	return adminSkillResponse{
+		ID:           util.UUIDToString(row.ID),
+		Name:         row.Name,
+		Description:  row.Description,
+		Roles:        roles,
+		CreatorName:  row.CreatorName,
+		CreatorEmail: row.CreatorEmail,
+		CreatedAt:    timestampString(row.CreatedAt),
+		UpdatedAt:    timestampString(row.UpdatedAt),
+	}
+}
+
+// promotedSkillToResponse is the write path's result: a promotion has no role
+// grants yet and the caller is the creator, so both stay empty.
+func promotedSkillToResponse(skill db.Skill) adminSkillResponse {
+	return adminSkillResponse{
 		ID:          util.UUIDToString(skill.ID),
 		Name:        skill.Name,
 		Description: skill.Description,
-		Roles:       roles,
+		Roles:       []string{},
 		CreatedAt:   timestampString(skill.CreatedAt),
 		UpdatedAt:   timestampString(skill.UpdatedAt),
 	}
@@ -70,7 +89,7 @@ func (h *Handler) ListGlobalSkillsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]adminSkillResponse, len(skills))
 	for i, skill := range skills {
-		out[i] = globalSkillToResponse(skill, bySkill[util.UUIDToString(skill.ID)])
+		out[i] = poolSkillToResponse(skill, bySkill[util.UUIDToString(skill.ID)])
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"skills": out})
 }
@@ -147,7 +166,7 @@ func (h *Handler) PromoteSkill(w http.ResponseWriter, r *http.Request) {
 		"name", updated.Name,
 		"workspace_id", util.UUIDToString(skill.WorkspaceID),
 	)
-	writeJSON(w, http.StatusOK, globalSkillToResponse(updated, nil))
+	writeJSON(w, http.StatusOK, promotedSkillToResponse(updated))
 }
 
 // DemoteSkill moves one global skill back into a chosen workspace.

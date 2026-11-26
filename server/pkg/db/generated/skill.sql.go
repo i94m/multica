@@ -805,10 +805,31 @@ func (q *Queries) ListGlobalSkills(ctx context.Context) ([]Skill, error) {
 
 const listGlobalSkillsForAdmin = `-- name: ListGlobalSkillsForAdmin :many
 
-SELECT id, workspace_id, name, description, content, config, created_by, created_at, updated_at, plugin_installation_id, revision FROM skill
-WHERE workspace_id IS NULL
-ORDER BY lower(name)
+SELECT
+    s.id, s.workspace_id, s.name, s.description, s.content, s.config, s.created_by, s.created_at, s.updated_at, s.plugin_installation_id, s.revision,
+    COALESCE(u.name, '') AS creator_name,
+    COALESCE(u.email, '') AS creator_email
+FROM skill s
+LEFT JOIN "user" u ON u.id = s.created_by
+WHERE s.workspace_id IS NULL
+ORDER BY lower(s.name)
 `
+
+type ListGlobalSkillsForAdminRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	WorkspaceID          pgtype.UUID        `json:"workspace_id"`
+	Name                 string             `json:"name"`
+	Description          string             `json:"description"`
+	Content              string             `json:"content"`
+	Config               []byte             `json:"config"`
+	CreatedBy            pgtype.UUID        `json:"created_by"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	PluginInstallationID pgtype.UUID        `json:"plugin_installation_id"`
+	Revision             int64              `json:"revision"`
+	CreatorName          string             `json:"creator_name"`
+	CreatorEmail         string             `json:"creator_email"`
+}
 
 // Role-skill junction
 //
@@ -816,16 +837,17 @@ ORDER BY lower(name)
 // bound to that role and cannot be disabled per agent. See agent_role_skill.
 // Admin console read: the skill pool roles may draw from. Only global skills
 // are eligible (a workspace-owned skill must not ride a role into another
-// tenant), so this is the whole picker.
-func (q *Queries) ListGlobalSkillsForAdmin(ctx context.Context) ([]Skill, error) {
+// tenant), so this is the whole picker. The creator is joined for the console
+// list, which shows who added each skill.
+func (q *Queries) ListGlobalSkillsForAdmin(ctx context.Context) ([]ListGlobalSkillsForAdminRow, error) {
 	rows, err := q.db.Query(ctx, listGlobalSkillsForAdmin)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Skill{}
+	items := []ListGlobalSkillsForAdminRow{}
 	for rows.Next() {
-		var i Skill
+		var i ListGlobalSkillsForAdminRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
@@ -838,6 +860,8 @@ func (q *Queries) ListGlobalSkillsForAdmin(ctx context.Context) ([]Skill, error)
 			&i.UpdatedAt,
 			&i.PluginInstallationID,
 			&i.Revision,
+			&i.CreatorName,
+			&i.CreatorEmail,
 		); err != nil {
 			return nil, err
 		}

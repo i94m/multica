@@ -9,6 +9,8 @@ const globalSkillSchema = z.object({
   name: z.string(),
   description: z.string().default(""),
   roles: z.array(z.string()).default([]),
+  creator_name: z.string().default(""),
+  creator_email: z.string().default(""),
   created_at: z.string().default(""),
   updated_at: z.string().default(""),
 });
@@ -44,7 +46,16 @@ export const skillsApi = {
     adminRequest<AdminGlobalSkill>(
       `/api/admin/skills/${encodeURIComponent(skillId)}/promote`,
       globalSkillSchema,
-      { id: "", name: "", description: "", roles: [], created_at: "", updated_at: "" },
+      {
+        id: "",
+        name: "",
+        description: "",
+        roles: [],
+        creator_name: "",
+        creator_email: "",
+        created_at: "",
+        updated_at: "",
+      },
       "POST",
     ),
   demote: (skillId: string, workspaceId: string): Promise<AdminWorkspaceSkill> =>

@@ -250,10 +250,16 @@ DELETE FROM agent_skill WHERE agent_id = $1;
 -- name: ListGlobalSkillsForAdmin :many
 -- Admin console read: the skill pool roles may draw from. Only global skills
 -- are eligible (a workspace-owned skill must not ride a role into another
--- tenant), so this is the whole picker.
-SELECT * FROM skill
-WHERE workspace_id IS NULL
-ORDER BY lower(name);
+-- tenant), so this is the whole picker. The creator is joined for the console
+-- list, which shows who added each skill.
+SELECT
+    s.*,
+    COALESCE(u.name, '') AS creator_name,
+    COALESCE(u.email, '') AS creator_email
+FROM skill s
+LEFT JOIN "user" u ON u.id = s.created_by
+WHERE s.workspace_id IS NULL
+ORDER BY lower(s.name);
 
 -- name: ListRoleSkills :many
 SELECT s.* FROM skill s

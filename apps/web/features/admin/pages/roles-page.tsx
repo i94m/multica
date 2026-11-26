@@ -33,7 +33,13 @@ export default function RolesPage() {
   const locale = useLocale();
   const queryClient = useQueryClient();
   const roles = useQuery({ queryKey: ["admin", "roles"], queryFn: rolesApi.list });
-  const pool = useQuery({ queryKey: ["admin", "role-skills-pool"], queryFn: rolesApi.skillPool });
+  // The query client keeps data forever by default; the pool changes whenever
+  // a skill's scope changes in the console, so this one always refetches.
+  const pool = useQuery({
+    queryKey: ["admin", "role-skills-pool"],
+    queryFn: rolesApi.skillPool,
+    staleTime: 0,
+  });
 
   const [editing, setEditing] = useState<AdminRole | null>(null);
   const [creating, setCreating] = useState(false);
@@ -89,22 +95,21 @@ export default function RolesPage() {
   const saveSkills = useMutation({
     mutationFn: ({ id, ids }: { id: string; ids: string[] }) =>
       rolesApi.setSkills(id, ids),
-    onSuccess: () => {
+    onSuccess: (data, vars) => {
+      // Write the response back before closing: the client keeps queries fresh
+      // forever, so without this the next open renders the pre-save set.
+      queryClient.setQueryData(["admin", "role-skills", vars.id], data);
+      queryClient.invalidateQueries({ queryKey: ["admin", "role-skills", vars.id] });
       invalidate();
       setSkillDialogRole(null);
     },
-  });
-
-  const roleSkills = useQuery({
-    queryKey: ["admin", "role-skills", skillDialogRole?.id],
-    queryFn: () => rolesApi.skills(skillDialogRole?.id ?? ""),
-    enabled: !!skillDialogRole,
   });
 
   const openSkills = async (role: AdminRole) => {
     const current = await queryClient.fetchQuery({
       queryKey: ["admin", "role-skills", role.id],
       queryFn: () => rolesApi.skills(role.id),
+      staleTime: 0,
     });
     setSelected(new Set(current.skills.map((s) => s.id)));
     setSkillDialogRole(role);

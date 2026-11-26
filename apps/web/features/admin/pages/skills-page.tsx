@@ -71,6 +71,8 @@ export default function SkillsPage() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [...adminKeys.all(), "global-skills"] });
     queryClient.invalidateQueries({ queryKey: [...adminKeys.all(), "workspace-skills"] });
+    // The roles dialog draws its picker from the same pool.
+    queryClient.invalidateQueries({ queryKey: ["admin", "role-skills-pool"] });
   };
 
   const promote = useMutation({
@@ -127,25 +129,33 @@ export default function SkillsPage() {
       ) : skills.length === 0 ? (
         <EmptyState label={copy.skills.empty} />
       ) : (
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>{copy.skills.name}</TableHead>
+              <TableHead className="w-[19rem]">{copy.skills.name}</TableHead>
+              <TableHead className="w-56">{copy.skills.creator}</TableHead>
               <TableHead>{copy.skills.rolesColumn}</TableHead>
-              <TableHead className="w-40">{copy.skills.updated}</TableHead>
+              <TableHead className="w-44">{copy.skills.updated}</TableHead>
               <TableHead className="w-40" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {skills.map((skill) => (
               <TableRow key={skill.id}>
-                <TableCell>
-                  <div className="font-medium">{skill.name}</div>
+                <TableCell className="max-w-[19rem]">
+                  <div className="truncate font-medium" title={skill.name}>
+                    {skill.name}
+                  </div>
                   {skill.description ? (
-                    <div className="text-caption text-muted-foreground">{skill.description}</div>
+                    <div className="truncate text-caption text-muted-foreground" title={skill.description}>
+                      {skill.description}
+                    </div>
                   ) : null}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="truncate text-muted-foreground">
+                  {skill.creator_name || skill.creator_email || copy.skills.unknownCreator}
+                </TableCell>
+                <TableCell className="truncate text-muted-foreground">
                   {skill.roles.length > 0 ? skill.roles.join(" · ") : copy.skills.noRoles}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
