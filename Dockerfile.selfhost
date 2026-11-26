@@ -1,0 +1,67 @@
+# Self-host build for the backend. Mirrors ./Dockerfile with two additions:
+# BuildKit cache mounts for the module cache and the build cache. `docker
+# compose build` runs BuildKit, so a rebuild reuses compiled packages and never
+# re-downloads modules unless go.mod/go.sum change.
+#
+# Keep this file in sync with ./Dockerfile: when upstream changes a build step,
+# port it here in the same upgrade. `scripts/check-selfhost-dockerfiles.sh`
+# reports drift.
+
+# --- Build stage ---
+FROM golang:1.27.4-alpine AS builder
+
+RUN apk add --no-cache git
+
+WORKDIR /src
+
+# Allow the module proxy to be overridden at build time (e.g. on networks
+# where proxy.golang.org is unreachable). The self-host build overlay defaults
+# it to goproxy.cn.
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
+# Cache dependencies. The mount keeps the module cache between builds even when
+# this layer is invalidated by a go.mod change.
+COPY server/go.mod server/go.sum ./server/
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    cd server && go mod download
+
+# Copy server source
+COPY server/ ./server/
+
+# Build binaries. The build cache mount carries compiled packages across
+# rebuilds, so a source-only change recompiles just the changed packages.
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG DATE=unknown
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    cd server && \
+    CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o bin/server ./cmd/server && \
+    CGO_ENABLED=0 go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}" -o bin/multica ./cmd/multica && \
+    CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/migrate ./cmd/migrate && \
+    CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/maintenance ./cmd/maintenance && \
+    CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/backfill_task_usage_hourly ./cmd/backfill_task_usage_hourly && \
+    CGO_ENABLED=0 go build -ldflags "-s -w" -o bin/backfill_codex_usage_cache ./cmd/backfill_codex_usage_cache
+
+# --- Runtime stage ---
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /src/server/bin/server .
+COPY --from=builder /src/server/bin/multica .
+COPY --from=builder /src/server/bin/migrate .
+COPY --from=builder /src/server/bin/maintenance .
+COPY --from=builder /src/server/bin/backfill_task_usage_hourly .
+COPY --from=builder /src/server/bin/backfill_codex_usage_cache .
+COPY server/migrations/ ./migrations/
+COPY LICENSE NOTICE ./
+COPY docker/entrypoint.sh .
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["./entrypoint.sh"]

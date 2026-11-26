@@ -1,12 +1,17 @@
 # Development override: build the backend/web images from the current checkout
 # instead of pulling the official GHCR images.
+#
+# Both builds use the self-host Dockerfiles rather than the upstream ones. They
+# are byte-for-byte the upstream build with BuildKit cache mounts added, so a
+# rebuild reuses the Go module/build caches and the pnpm store instead of
+# downloading dependencies again. See scripts/check-selfhost-dockerfiles.sh.
 
 services:
   backend:
     image: multica-backend:dev
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.selfhost
       args:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-unknown}
@@ -19,9 +24,12 @@ services:
     image: multica-web:dev
     build:
       context: .
-      dockerfile: Dockerfile.web
+      dockerfile: Dockerfile.web.selfhost
       args:
         NEXT_PUBLIC_APP_VERSION: dev
+        # Optional mirror for slow or filtered networks; empty keeps the
+        # registry from .npmrc and the lockfile.
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
 
   collab:
     image: multica-collab:dev
