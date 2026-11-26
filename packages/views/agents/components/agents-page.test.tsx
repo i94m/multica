@@ -132,7 +132,7 @@ vi.mock("@multica/core/hooks", () => ({
 vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({
     newAgent: () => "/test-workspace/agents/new",
-    newAgentManual: () => "/test-workspace/agents/new/manual",
+    newAgentManual: () => "/test-workspace/agents/new",
     agentDetail: (id: string) => `/test-workspace/agents/${id}`,
     runtimes: () => "/test-workspace/runtimes",
   }),
@@ -427,7 +427,7 @@ describe("AgentsPage header", () => {
       within(header).getByRole("button", { name: "Display settings" }),
     ).toBeInTheDocument();
     fireEvent.click(within(header).getByRole("button", { name: "New agent" }));
-    expect(adapter.push).toHaveBeenCalledWith("/test-workspace/agents/new/manual");
+    expect(adapter.push).toHaveBeenCalledWith("/test-workspace/agents/new");
   });
 });
 
