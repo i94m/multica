@@ -301,7 +301,7 @@ export function SquadDetailPage() {
   const isArchived = (m: SquadMember) =>
     m.member_type === "agent" && !!agents.find((a: Agent) => a.id === m.member_id)?.archived_at;
   const archived = !!squad.archived_at;
-  const createAgentHref = `${p.newAgentManual()}?squad=${encodeURIComponent(squadId)}`;
+  const createAgentHref = `${p.newAgent()}?squad=${encodeURIComponent(squadId)}`;
 
   const assignWork = () =>
     useModalStore.getState().open("create-issue", {

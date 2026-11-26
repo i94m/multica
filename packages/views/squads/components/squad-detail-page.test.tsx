@@ -53,7 +53,6 @@ vi.mock("@multica/core/paths", () => ({
   useWorkspacePaths: () => ({
     squads: () => "/acme/squads",
     newAgent: () => "/acme/agents/new",
-    newAgentManual: () => "/acme/agents/new/manual",
     agentDetail: (id: string) => `/acme/agents/${id}`,
     issueDetail: (id: string) => `/acme/issues/${id}`,
   }),
@@ -251,8 +250,8 @@ describe("SquadDetailPage", () => {
     expect(mocks.copyText).toHaveBeenCalledWith("https://multica.test/acme/squads/sq-1");
 
     await user.click(screen.getByRole("button", { name: "More actions" }));
-	await user.click(await screen.findByRole("menuitem", { name: "Create agent" }));
-	expect(push).toHaveBeenCalledWith("/acme/agents/new/manual?squad=sq-1");
+    await user.click(await screen.findByRole("menuitem", { name: "Create agent" }));
+    expect(push).toHaveBeenCalledWith("/acme/agents/new?squad=sq-1");
 
     await user.click(screen.getByRole("button", { name: "More actions" }));
     await user.click(await screen.findByRole("menuitem", { name: "Archive" }));

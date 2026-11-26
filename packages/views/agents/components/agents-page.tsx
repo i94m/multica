@@ -698,7 +698,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     all: t(($) => $.page.scope_title.all),
     archived: t(($) => $.page.scope_title.archived),
   };
-  const openCreate = () => navigation.push(paths.newAgentManual());
+  const openCreate = () => navigation.push(paths.newAgent());
 
   // The active sort field / availability filter reads columns that arrive in
   // separate queries from the main agent list (activity → lastActiveDays,
