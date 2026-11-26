@@ -4315,23 +4315,6 @@ export class ApiClient {
     await this.fetch(`/api/skills/${id}`, { method: "DELETE" });
   }
 
-  /**
-   * Promotes a workspace skill to the global namespace or moves a global
-   * skill into the current workspace. Admin-only on the server for promotion.
-   */
-  async setSkillScope(
-    id: string,
-    scope: "workspace" | "global",
-  ): Promise<Skill> {
-    const raw = await this.fetch<unknown>(`/api/skills/${id}/scope`, {
-      method: "PUT",
-      body: JSON.stringify({ scope }),
-    });
-    return parseWithFallback(raw, SkillSchema, EMPTY_SKILL, {
-      endpoint: "PUT /api/skills/:id/scope",
-    });
-  }
-
   async listAgentRoles(): Promise<AgentRole[]> {
     return this.fetch("/api/agent-roles");
   }

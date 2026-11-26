@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -22,9 +23,13 @@ func TestDeleteGlobalSkillRequiresUnsetFirst(t *testing.T) {
 	req := withURLParam(newRequest("DELETE", "/api/skills/"+globalID, nil), "id", globalID)
 	testutil.Call(t, testHandler.DeleteSkill, req).Want(http.StatusConflict)
 
-	// Moving it back into a workspace makes it deletable again.
-	testutil.Call(t, testHandler.SetSkillScope, setSkillScopeRequest(t, globalID, "", "workspace")).
-		Want(http.StatusOK)
+	// Moving it back into a workspace makes it deletable again. Scope changes
+	// are a platform-console action now, so the fixture demotes it directly.
+	if _, err := testPool.Exec(context.Background(),
+		`UPDATE skill SET workspace_id = $2 WHERE id = $1`, globalID, testWorkspaceID,
+	); err != nil {
+		t.Fatalf("demote global skill: %v", err)
+	}
 	req = withURLParam(newRequest("DELETE", "/api/skills/"+globalID, nil), "id", globalID)
 	testutil.Call(t, testHandler.DeleteSkill, req).Want(http.StatusNoContent)
 }
